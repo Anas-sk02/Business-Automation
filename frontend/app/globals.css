@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  
+  /* SignalForge UI-UX.md Semantic Tokens */
+  --color-petrol: var(--petrol);
+  --color-petrol-soft: var(--petrol-soft);
+  --color-good: var(--good);
+  --color-good-soft: var(--good-soft);
+  --color-caution: var(--caution);
+  --color-caution-soft: var(--caution-soft);
+  --color-problem: var(--problem);
+  --color-problem-soft: var(--problem-soft);
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+}
+
+/* Light theme (default per UI-UX.md Section 3.1) */
+:root {
+  --background: #F4F6F7;        /* paper */
+  --foreground: #17212B;        /* ink */
+  --card: #FFFFFF;              /* surface */
+  --card-foreground: #17212B;   /* ink */
+  --popover: #FFFFFF;           /* surface */
+  --popover-foreground: #17212B;
+  --primary: #0E5A6B;           /* petrol */
+  --primary-foreground: #FFFFFF;
+  --secondary: #E3F0F3;         /* petrol-soft */
+  --secondary-foreground: #0E5A6B;
+  --muted: #EBEFF2;
+  --muted-foreground: #556270;  /* ink-soft */
+  --accent: #E3F0F3;            /* petrol-soft */
+  --accent-foreground: #0E5A6B;
+  --destructive: #B0352A;       /* problem */
+  --destructive-foreground: #FFFFFF;
+  --border: #D9DFE4;            /* line */
+  --input: #D9DFE4;             /* line */
+  --ring: #0E5A6B;              /* petrol */
+  --radius: 6px;
+
+  /* Custom UI-UX.md tokens */
+  --petrol: #0E5A6B;
+  --petrol-soft: #E3F0F3;
+  --good: #2B7A4F;
+  --good-soft: #E4F2EA;
+  --caution: #8F5A07;
+  --caution-soft: #FAF0DC;
+  --problem: #B0352A;
+  --problem-soft: #FBE9E7;
+
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #17212B;
+  --sidebar-primary: #0E5A6B;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #E3F0F3;
+  --sidebar-accent-foreground: #0E5A6B;
+  --sidebar-border: #D9DFE4;
+  --sidebar-ring: #0E5A6B;
+}
+
+/* Dark theme per UI-UX.md Section 3.1 */
+.dark {
+  --background: #0F161D;        /* paper dark */
+  --foreground: #E6EBEF;        /* ink dark */
+  --card: #16202A;              /* surface dark */
+  --card-foreground: #E6EBEF;
+  --popover: #16202A;
+  --popover-foreground: #E6EBEF;
+  --primary: #5BB5C8;           /* petrol dark */
+  --primary-foreground: #0F161D;
+  --secondary: #15323A;         /* petrol-soft dark */
+  --secondary-foreground: #5BB5C8;
+  --muted: #1B2733;
+  --muted-foreground: #9AA7B3;  /* ink-soft dark */
+  --accent: #15323A;
+  --accent-foreground: #5BB5C8;
+  --destructive: #F08A7F;       /* problem dark */
+  --destructive-foreground: #0F161D;
+  --border: #26333F;            /* line dark */
+  --input: #26333F;
+  --ring: #5BB5C8;
+  
+  /* Custom UI-UX.md dark tokens */
+  --petrol: #5BB5C8;
+  --petrol-soft: #15323A;
+  --good: #62C08A;
+  --good-soft: #15291F;
+  --caution: #E0A94A;
+  --caution-soft: #33280F;
+  --problem: #F08A7F;
+  --problem-soft: #3A1A17;
+
+  --sidebar: #16202A;
+  --sidebar-foreground: #E6EBEF;
+  --sidebar-primary: #5BB5C8;
+  --sidebar-primary-foreground: #0F161D;
+  --sidebar-accent: #15323A;
+  --sidebar-accent-foreground: #5BB5C8;
+  --sidebar-border: #26333F;
+  --sidebar-ring: #5BB5C8;
+}
+
+body {
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Tabular numbers for all aligned figures per UI-UX.md Section 3.2 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
