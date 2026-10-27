@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -77,22 +77,28 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex h-screen w-full bg-background overflow-hidden">
       {/* Desktop & Tablet Sidebar */}
       <div className="hidden md:flex shrink-0 h-full">
-        <Sidebar isCollapsed={isTabletCollapsed} />
+        <Suspense fallback={<aside className="w-56 h-full bg-card border-r border-border" />}>
+          <Sidebar isCollapsed={isTabletCollapsed} />
+        </Suspense>
       </div>
 
       {/* Mobile Sidebar Sheet */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
         <SheetContent side="left" className="p-0 w-64 border-r border-border bg-card">
-          <Sidebar onNavigate={() => setMobileMenuOpen(false)} />
+          <Suspense fallback={<div className="p-4" />}>
+            <Sidebar onNavigate={() => setMobileMenuOpen(false)} />
+          </Suspense>
         </SheetContent>
       </Sheet>
 
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
-        <Header
-          userProfile={userProfile}
-          onMobileMenuToggle={() => setMobileMenuOpen(true)}
-        />
+        <Suspense fallback={<header className="h-14 bg-card border-b border-border" />}>
+          <Header
+            userProfile={userProfile}
+            onMobileMenuToggle={() => setMobileMenuOpen(true)}
+          />
+        </Suspense>
         <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
           <div className="max-w-6xl mx-auto">{children}</div>
         </main>
