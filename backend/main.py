@@ -96,8 +96,10 @@ async def health_check() -> dict:
 
 # Include Routers with /api prefix per decisions.md Section 4
 from backend.routers.auth import router as auth_router
+from backend.routers.campaigns import router as campaigns_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+app.include_router(campaigns_router, prefix="/api/campaigns", tags=["Campaigns"])
 
 
 

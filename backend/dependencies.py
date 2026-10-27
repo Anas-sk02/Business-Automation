@@ -62,68 +62,82 @@ def _validate_uuid(val: str, entity_name: str) -> None:
 
 
 async def get_owned_campaign(
-    campaign_id: str,
+    id: str = "",
+    campaign_id: str = "",
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Verify campaign exists and belongs to the authenticated user.
     
     Per decisions.md Section 3: If unowned or nonexistent, return 404 (not 403).
     """
-    _validate_uuid(campaign_id, "Campaign")
+    target_id = id or campaign_id
+    if not target_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Campaign ID is required",
+        )
+    _validate_uuid(target_id, "Campaign")
 
     try:
         response = (
             supabase.table("campaigns")
             .select("*")
-            .eq("id", campaign_id)
+            .eq("id", target_id)
             .eq("user_id", user["id"])
             .execute()
         )
         if not response.data:
             raise HTTPException(
                 status_code=404,
-                detail=f"Campaign with ID '{campaign_id}' not found",
+                detail=f"Campaign with ID '{target_id}' not found",
             )
         return response.data[0]
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Error checking ownership for campaign {campaign_id}: {exc}", exc_info=True)
+        logger.error(f"Error checking ownership for campaign {target_id}: {exc}", exc_info=True)
         raise HTTPException(
             status_code=404,
-            detail=f"Campaign with ID '{campaign_id}' not found",
+            detail=f"Campaign with ID '{target_id}' not found",
         ) from exc
 
 
 async def get_owned_lead(
-    lead_id: str,
+    id: str = "",
+    lead_id: str = "",
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Verify lead exists and belongs to a campaign owned by the authenticated user.
     
     Per decisions.md Section 3: If unowned or nonexistent, return 404 (not 403).
     """
-    _validate_uuid(lead_id, "Lead")
+    target_id = id or lead_id
+    if not target_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Lead ID is required",
+        )
+    _validate_uuid(target_id, "Lead")
 
     try:
         response = (
             supabase.table("leads")
             .select("*, campaigns!inner(user_id)")
-            .eq("id", lead_id)
+            .eq("id", target_id)
             .eq("campaigns.user_id", user["id"])
             .execute()
         )
         if not response.data:
             raise HTTPException(
                 status_code=404,
-                detail=f"Lead with ID '{lead_id}' not found",
+                detail=f"Lead with ID '{target_id}' not found",
             )
         return response.data[0]
     except HTTPException:
         raise
     except Exception as exc:
-        logger.error(f"Error checking ownership for lead {lead_id}: {exc}", exc_info=True)
+        logger.error(f"Error checking ownership for lead {target_id}: {exc}", exc_info=True)
         raise HTTPException(
             status_code=404,
-            detail=f"Lead with ID '{lead_id}' not found",
+            detail=f"Lead with ID '{target_id}' not found",
         ) from exc
