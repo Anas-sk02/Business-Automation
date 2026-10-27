@@ -1,4 +1,5 @@
 import os
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -34,6 +35,28 @@ class Settings(BaseSettings):
     HOST: str = "127.0.0.1"
     PORT: int = 8000
 
+    @field_validator("SUPABASE_URL")
+    @classmethod
+    def validate_supabase_url(cls, v: str) -> str:
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("SUPABASE_URL must begin with http:// or https://")
+        return v.rstrip("/")
+
+    @field_validator("DAILY_SEND_LIMIT")
+    @classmethod
+    def validate_daily_send_limit(cls, v: int) -> int:
+        if v < 1 or v > 1000:
+            raise ValueError("DAILY_SEND_LIMIT must be between 1 and 1000")
+        return v
+
+    @field_validator("AI_PROVIDER")
+    @classmethod
+    def validate_ai_provider(cls, v: str) -> str:
+        allowed = {"gemini", "claude"}
+        if v.lower() not in allowed:
+            raise ValueError(f"AI_PROVIDER must be one of {allowed}")
+        return v.lower()
+
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(__file__), ".env"),
         env_file_encoding="utf-8",
@@ -42,3 +65,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

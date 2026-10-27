@@ -2,9 +2,12 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import uvicorn
+
 
 from backend.config import settings
 
@@ -41,6 +44,42 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc: HTTPException):
+    """Handle explicit HTTP exceptions with standard error response envelope."""
+    error_code = getattr(exc, "error_code", f"HTTP_{exc.status_code}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail, "error_code": error_code},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    """Handle validation errors without exposing internal traces."""
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Request validation failed",
+            "error_code": "VALIDATION_ERROR",
+            "errors": exc.errors(),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc: Exception):
+    """Log full trace server-side and return generic sanitized error to client (security.md)."""
+    logger.error(f"Unhandled exception on {request.method} {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server error occurred",
+            "error_code": "INTERNAL_SERVER_ERROR",
+        },
+    )
 
 
 @app.get("/health", tags=["Health"])

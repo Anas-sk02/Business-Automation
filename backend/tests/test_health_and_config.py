@@ -44,3 +44,60 @@ def test_cors_preflight_headers():
     )
     assert response.status_code == 200
     assert response.headers.get("access-control-allow-origin") == "http://localhost:3000"
+
+
+def test_database_connection_check():
+    """Verify database connection checker runs without unhandled exception."""
+    from backend.database import check_database_connection
+
+    result = check_database_connection()
+    assert isinstance(result, bool)
+
+
+def test_exception_handler_sanitizes_500():
+    """Verify unhandled exceptions return sanitized JSON error without stack traces."""
+    from fastapi import APIRouter
+
+    dummy_router = APIRouter()
+
+    @dummy_router.get("/test-error")
+    def trigger_error():
+        raise RuntimeError("Secret DB connection string leaked!")
+
+    app.include_router(dummy_router)
+
+    safe_client = TestClient(app, raise_server_exceptions=False)
+    response = safe_client.get("/test-error")
+    assert response.status_code == 500
+    data = response.json()
+    assert data["error_code"] == "INTERNAL_SERVER_ERROR"
+    assert "Secret DB connection string" not in data["detail"]
+    assert data["detail"] == "An internal server error occurred"
+
+
+
+def test_settings_validation_rejects_bad_input():
+    """Verify Settings rejects invalid values."""
+    from backend.config import Settings
+    from pydantic import ValidationError
+
+    # Bad URL
+    with pytest.raises(ValidationError):
+        Settings(SUPABASE_URL="ftp://invalid.com", SUPABASE_SERVICE_KEY="key")
+
+    # Bad send limit
+    with pytest.raises(ValidationError):
+        Settings(
+            SUPABASE_URL="https://example.com",
+            SUPABASE_SERVICE_KEY="key",
+            DAILY_SEND_LIMIT=0,
+        )
+
+    # Bad AI provider
+    with pytest.raises(ValidationError):
+        Settings(
+            SUPABASE_URL="https://example.com",
+            SUPABASE_SERVICE_KEY="key",
+            AI_PROVIDER="unknown_ai",
+        )
+
