@@ -59,14 +59,17 @@ async def http_exception_handler(request, exc: HTTPException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request, exc: RequestValidationError):
     """Handle validation errors without exposing internal traces."""
+    from fastapi.encoders import jsonable_encoder
+
     return JSONResponse(
         status_code=422,
         content={
             "detail": "Request validation failed",
             "error_code": "VALIDATION_ERROR",
-            "errors": exc.errors(),
+            "errors": jsonable_encoder(exc.errors()),
         },
     )
+
 
 
 @app.exception_handler(Exception)
@@ -89,6 +92,13 @@ async def health_check() -> dict:
         "status": "healthy",
         "environment": settings.ENVIRONMENT,
     }
+
+
+# Include Routers with /api prefix per decisions.md Section 4
+from backend.routers.auth import router as auth_router
+
+app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+
 
 
 if __name__ == "__main__":
