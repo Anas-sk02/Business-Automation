@@ -40,6 +40,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -614,14 +615,22 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS set_updated_at ON public.profiles;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.campaigns;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.campaigns
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.leads;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.leads
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.tasks;
 CREATE TRIGGER set_updated_at BEFORE UPDATE ON public.tasks
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 
 -- ============================================================
 -- 13. ROW LEVEL SECURITY (RLS)
@@ -641,20 +650,24 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.api_costs ENABLE ROW LEVEL SECURITY;
 
 -- Profiles: users can only see/edit their own
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile"
     ON public.profiles FOR SELECT
     USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id);
 
 -- Campaigns: users can only access their own
+DROP POLICY IF EXISTS "Users can CRUD own campaigns" ON public.campaigns;
 CREATE POLICY "Users can CRUD own campaigns"
     ON public.campaigns FOR ALL
     USING (auth.uid() = user_id);
 
 -- Leads: users access through their campaigns
+DROP POLICY IF EXISTS "Users can access leads in own campaigns" ON public.leads;
 CREATE POLICY "Users can access leads in own campaigns"
     ON public.leads FOR ALL
     USING (
@@ -664,6 +677,7 @@ CREATE POLICY "Users can access leads in own campaigns"
     );
 
 -- Website audits: through leads → campaigns
+DROP POLICY IF EXISTS "Users can access audits for own leads" ON public.website_audits;
 CREATE POLICY "Users can access audits for own leads"
     ON public.website_audits FOR ALL
     USING (
@@ -675,6 +689,7 @@ CREATE POLICY "Users can access audits for own leads"
     );
 
 -- Evidence items: through leads → campaigns
+DROP POLICY IF EXISTS "Users can access evidence for own leads" ON public.evidence_items;
 CREATE POLICY "Users can access evidence for own leads"
     ON public.evidence_items FOR ALL
     USING (
@@ -686,6 +701,7 @@ CREATE POLICY "Users can access evidence for own leads"
     );
 
 -- AI analyses: through leads → campaigns
+DROP POLICY IF EXISTS "Users can access analyses for own leads" ON public.ai_analyses;
 CREATE POLICY "Users can access analyses for own leads"
     ON public.ai_analyses FOR ALL
     USING (
@@ -697,6 +713,7 @@ CREATE POLICY "Users can access analyses for own leads"
     );
 
 -- WhatsApp messages: through campaigns
+DROP POLICY IF EXISTS "Users can access messages in own campaigns" ON public.whatsapp_messages;
 CREATE POLICY "Users can access messages in own campaigns"
     ON public.whatsapp_messages FOR ALL
     USING (
@@ -706,11 +723,13 @@ CREATE POLICY "Users can access messages in own campaigns"
     );
 
 -- Tasks: user's own tasks
+DROP POLICY IF EXISTS "Users can access own tasks" ON public.tasks;
 CREATE POLICY "Users can access own tasks"
     ON public.tasks FOR ALL
     USING (auth.uid() = user_id);
 
 -- Follow-up schedules: through campaigns
+DROP POLICY IF EXISTS "Users can access followups in own campaigns" ON public.followup_schedules;
 CREATE POLICY "Users can access followups in own campaigns"
     ON public.followup_schedules FOR ALL
     USING (
@@ -720,11 +739,13 @@ CREATE POLICY "Users can access followups in own campaigns"
     );
 
 -- Notifications: user's own
+DROP POLICY IF EXISTS "Users can access own notifications" ON public.notifications;
 CREATE POLICY "Users can access own notifications"
     ON public.notifications FOR ALL
     USING (auth.uid() = user_id);
 
 -- API costs: through campaigns
+DROP POLICY IF EXISTS "Users can view costs for own campaigns" ON public.api_costs;
 CREATE POLICY "Users can view costs for own campaigns"
     ON public.api_costs FOR SELECT
     USING (
@@ -732,3 +753,4 @@ CREATE POLICY "Users can view costs for own campaigns"
             SELECT id FROM public.campaigns WHERE user_id = auth.uid()
         )
     );
+

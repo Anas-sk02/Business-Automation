@@ -24,6 +24,7 @@ VALUES ('screenshots', 'screenshots', false)
 ON CONFLICT (id) DO UPDATE SET public = false;
 
 -- 5. Storage RLS: Private bucket accessed via service role or user-isolated path {user_id}/{lead_id}/*
+DROP POLICY IF EXISTS "Users can access their own screenshots" ON storage.objects;
 CREATE POLICY "Users can access their own screenshots"
 ON storage.objects FOR ALL
 USING (
