@@ -170,6 +170,18 @@ async def pause_campaign(
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> ResponseEnvelope[CampaignResponse]:
     """Pause an active campaign."""
+    current_status = campaign.get("status")
+    if current_status == "completed":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot pause a completed campaign",
+        )
+    if current_status == "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot pause a draft campaign",
+        )
+
     try:
         response = (
             supabase.table("campaigns")
@@ -178,10 +190,17 @@ async def pause_campaign(
             .eq("user_id", user["id"])
             .execute()
         )
+        if not response.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to pause campaign record",
+            )
         return ResponseEnvelope(
             data=CampaignResponse(**response.data[0]),
             message="Campaign paused successfully",
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Error pausing campaign {campaign['id']}: {exc}", exc_info=True)
         raise HTTPException(
@@ -196,6 +215,13 @@ async def resume_campaign(
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> ResponseEnvelope[CampaignResponse]:
     """Resume a paused campaign."""
+    current_status = campaign.get("status")
+    if current_status in ("draft", "completed"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot resume a campaign with status '{current_status}'",
+        )
+
     try:
         response = (
             supabase.table("campaigns")
@@ -204,10 +230,17 @@ async def resume_campaign(
             .eq("user_id", user["id"])
             .execute()
         )
+        if not response.data:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to resume campaign record",
+            )
         return ResponseEnvelope(
             data=CampaignResponse(**response.data[0]),
             message="Campaign resumed successfully",
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Error resuming campaign {campaign['id']}: {exc}", exc_info=True)
         raise HTTPException(

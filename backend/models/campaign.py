@@ -19,8 +19,16 @@ class WhatsAppSettings(BaseModel):
     auto_send_after_approval: bool = False
     followup_gap_days: int = Field(default=3, ge=1, le=30)
     max_followups: int = Field(default=3, ge=0, le=5)
-    quiet_hours_start: str = "21:00"
-    quiet_hours_end: str = "09:00"
+    quiet_hours_start: str = Field(
+        default="21:00",
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        description="Start of quiet hours in HH:MM 24h format",
+    )
+    quiet_hours_end: str = Field(
+        default="09:00",
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        description="End of quiet hours in HH:MM 24h format",
+    )
 
 
 class CreateCampaignRequest(BaseModel):
@@ -39,7 +47,7 @@ class CreateCampaignRequest(BaseModel):
 
 
 class UpdateCampaignRequest(BaseModel):
-    """Campaign update payload (partial update)."""
+    """Campaign update payload (partial update). Settings only; lifecycle state changes use dedicated endpoints."""
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     industry: Optional[str] = Field(default=None, min_length=1, max_length=100)
     industry_label: Optional[str] = Field(default=None, min_length=1, max_length=100)
@@ -51,7 +59,6 @@ class UpdateCampaignRequest(BaseModel):
     signals: Optional[List[str]] = None
     whatsapp_settings: Optional[WhatsAppSettings] = None
     max_budget: Optional[float] = Field(default=None, ge=0.0)
-    status: Optional[CampaignStatus] = None
 
 
 class CampaignResponse(BaseModel):

@@ -287,3 +287,149 @@ def test_pause_and_resume_campaign():
     assert resume_res.json()["data"]["status"] == "active"
 
     app.dependency_overrides.clear()
+
+
+def test_update_campaign_empty_payload_rejected():
+    """Verify empty update payload returns 400 Bad Request."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+    app.dependency_overrides[get_owned_campaign] = lambda: {"id": SAMPLE_CAMPAIGN_ID, "user_id": MOCK_USER_1["id"]}
+
+    response = client.put(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}", json={})
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "No valid fields provided" in response.json()["detail"]
+
+
+def test_create_campaign_invalid_quiet_hours_rejected():
+    """Verify malformed quiet_hours time format triggers 422 validation error."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    bad_payload = dict(
+        VALID_CREATE_PAYLOAD,
+        whatsapp_settings={"quiet_hours_start": "25:00", "quiet_hours_end": "bad-time"},
+    )
+    response = client.post("/api/campaigns", json=bad_payload)
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json()["error_code"] == "VALIDATION_ERROR"
+
+
+def test_invalid_uuid_returns_404_across_endpoints():
+    """Verify non-UUID strings return 404 per decisions.md Section 3."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    endpoints = [
+        ("GET", "/api/campaigns/not-a-valid-uuid"),
+        ("PUT", "/api/campaigns/not-a-valid-uuid"),
+        ("DELETE", "/api/campaigns/not-a-valid-uuid"),
+        ("POST", "/api/campaigns/not-a-valid-uuid/pause"),
+        ("POST", "/api/campaigns/not-a-valid-uuid/resume"),
+    ]
+
+    for method, path in endpoints:
+        if method == "GET":
+            res = client.get(path)
+        elif method == "PUT":
+            res = client.put(path, json={"name": "New Name"})
+        elif method == "DELETE":
+            res = client.delete(path)
+        elif method == "POST":
+            res = client.post(path)
+
+        assert res.status_code == 404, f"Expected 404 for {method} {path}, got {res.status_code}"
+        assert "not found" in res.json()["detail"].lower()
+
+    app.dependency_overrides.clear()
+
+
+def test_delete_campaign_unowned_returns_404():
+    """Verify decisions.md rule: deleting an unowned campaign returns 404, NEVER 403."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_2
+
+    mock_resp = MagicMock()
+    mock_resp.data = []
+
+    with patch("backend.dependencies.supabase.table") as mock_dep_table:
+        mock_dep_table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = mock_resp
+        response = client.delete(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_pause_campaign_invalid_states():
+    """Verify pausing a draft or completed campaign is rejected with 400."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    # Attempt to pause draft
+    app.dependency_overrides[get_owned_campaign] = lambda: {"id": SAMPLE_CAMPAIGN_ID, "status": "draft", "user_id": MOCK_USER_1["id"]}
+    res_draft = client.post(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}/pause")
+    assert res_draft.status_code == 400
+    assert "Cannot pause a draft campaign" in res_draft.json()["detail"]
+
+    # Attempt to pause completed
+    app.dependency_overrides[get_owned_campaign] = lambda: {"id": SAMPLE_CAMPAIGN_ID, "status": "completed", "user_id": MOCK_USER_1["id"]}
+    res_completed = client.post(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}/pause")
+    assert res_completed.status_code == 400
+    assert "Cannot pause a completed campaign" in res_completed.json()["detail"]
+
+    app.dependency_overrides.clear()
+
+
+def test_resume_campaign_invalid_states():
+    """Verify resuming a draft or completed campaign is rejected with 400."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    # Attempt to resume draft
+    app.dependency_overrides[get_owned_campaign] = lambda: {"id": SAMPLE_CAMPAIGN_ID, "status": "draft", "user_id": MOCK_USER_1["id"]}
+    res_draft = client.post(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}/resume")
+    assert res_draft.status_code == 400
+    assert "Cannot resume a campaign with status 'draft'" in res_draft.json()["detail"]
+
+    # Attempt to resume completed
+    app.dependency_overrides[get_owned_campaign] = lambda: {"id": SAMPLE_CAMPAIGN_ID, "status": "completed", "user_id": MOCK_USER_1["id"]}
+    res_completed = client.post(f"/api/campaigns/{SAMPLE_CAMPAIGN_ID}/resume")
+    assert res_completed.status_code == 400
+    assert "Cannot resume a campaign with status 'completed'" in res_completed.json()["detail"]
+
+    app.dependency_overrides.clear()
+
+
+def test_list_campaigns_status_filter():
+    """Verify list_campaigns with status query parameter filters appropriately."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    mock_resp = MagicMock()
+    mock_resp.data = []
+    mock_resp.count = 0
+
+    with patch("backend.routers.campaigns.supabase.table") as mock_table:
+        query_mock = mock_table.return_value.select.return_value.eq.return_value
+        query_mock.eq.return_value.order.return_value.range.return_value.execute.return_value = mock_resp
+        response = client.get("/api/campaigns?status=active")
+
+    app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["data"] == []
+
+
+def test_list_campaigns_invalid_pagination():
+    """Verify invalid pagination query parameters trigger 422 validation errors."""
+    app.dependency_overrides[get_current_user] = lambda: MOCK_USER_1
+
+    # page < 1
+    res1 = client.get("/api/campaigns?page=0")
+    assert res1.status_code == 422
+    assert res1.json()["error_code"] == "VALIDATION_ERROR"
+
+    # page_size > 100
+    res2 = client.get("/api/campaigns?page_size=200")
+    assert res2.status_code == 422
+    assert res2.json()["error_code"] == "VALIDATION_ERROR"
+
+    app.dependency_overrides.clear()
