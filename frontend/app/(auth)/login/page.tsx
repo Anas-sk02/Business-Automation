@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -21,26 +21,25 @@ function LoginForm() {
     !rawRedirect.startsWith("/\\");
   const redirectedFrom = isSafeRelative ? rawRedirect : "/";
 
+  // Handle errors passed via search parameters (e.g. from /auth/callback)
+  const callbackError = searchParams.get("error");
+  const initialError =
+    callbackError === "auth_callback_failed"
+      ? "Authentication link expired or invalid. Please sign in again."
+      : callbackError === "config_missing"
+      ? "Application configuration error. Please contact support."
+      : callbackError
+      ? "Authentication failed. Please sign in."
+      : null;
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(initialError);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   const supabase = createClient();
-
-  // Handle errors passed via search parameters (e.g. from /auth/callback)
-  const callbackError = searchParams.get("error");
-  useEffect(() => {
-    if (callbackError === "auth_callback_failed") {
-      setErrorMsg("Authentication link expired or invalid. Please sign in again.");
-    } else if (callbackError === "config_missing") {
-      setErrorMsg("Application configuration error. Please contact support.");
-    } else if (callbackError) {
-      setErrorMsg("Authentication failed. Please sign in.");
-    }
-  }, [callbackError]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();

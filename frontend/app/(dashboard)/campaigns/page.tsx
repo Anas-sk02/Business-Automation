@@ -85,21 +85,39 @@ export default function CampaignsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const fetchCampaigns = async () => {
+  const handleRetry = () => {
     setIsLoading(true);
     setErrorMsg(null);
-    try {
-      const response = await api.get<PaginatedEnvelope<Campaign>>("/api/campaigns");
-      setCampaigns(response.data || []);
-    } catch {
-      setErrorMsg("Failed to load campaigns. Please verify backend connection.");
-    } finally {
-      setIsLoading(false);
-    }
+    api.get<PaginatedEnvelope<Campaign>>("/api/campaigns")
+      .then((response) => {
+        setCampaigns(response.data || []);
+      })
+      .catch(() => {
+        setErrorMsg("Failed to load campaigns. Please verify backend connection.");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchCampaigns();
+    let ignore = false;
+    api.get<PaginatedEnvelope<Campaign>>("/api/campaigns")
+      .then((response) => {
+        if (!ignore) {
+          setCampaigns(response.data || []);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setErrorMsg("Failed to load campaigns. Please verify backend connection.");
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   return (
@@ -132,7 +150,7 @@ export default function CampaignsPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchCampaigns}
+            onClick={handleRetry}
             className="h-8 border-problem/40 text-problem hover:bg-problem/10"
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />

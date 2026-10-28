@@ -106,23 +106,39 @@ function CampaignDetailContent({
   const [confirmNameInput, setConfirmNameInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const fetchCampaign = async () => {
+  const handleRetry = () => {
     setIsLoading(true);
     setLoadError(null);
-    try {
-      const response = await api.get<ResponseEnvelope<Campaign>>(
-        `/api/campaigns/${campaignId}`
-      );
-      setCampaign(response.data);
-    } catch {
-      setLoadError("Failed to load campaign. Record not found or unowned.");
-    } finally {
-      setIsLoading(false);
-    }
+    api.get<ResponseEnvelope<Campaign>>(`/api/campaigns/${campaignId}`)
+      .then((response) => {
+        setCampaign(response.data);
+      })
+      .catch(() => {
+        setLoadError("Failed to load campaign. Record not found or unowned.");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
   };
 
   useEffect(() => {
-    fetchCampaign();
+    let ignore = false;
+    api.get<ResponseEnvelope<Campaign>>(`/api/campaigns/${campaignId}`)
+      .then((response) => {
+        if (!ignore) {
+          setCampaign(response.data);
+          setIsLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setLoadError("Failed to load campaign. Record not found or unowned.");
+          setIsLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
   }, [campaignId]);
 
   const handlePauseResume = async () => {
@@ -190,7 +206,7 @@ function CampaignDetailContent({
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchCampaign}
+            onClick={handleRetry}
             className="border-problem/40 text-problem hover:bg-problem/10 text-xs"
           >
             <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
