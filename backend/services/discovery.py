@@ -7,6 +7,7 @@ and audit cost tracking in public.api_costs.
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 import httpx
 import phonenumbers
 
@@ -131,6 +132,41 @@ class DiscoveryService:
                 return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
             return None
         except phonenumbers.NumberParseException:
+            return None
+
+    @staticmethod
+    def canonicalize_url(url: str | None) -> str | None:
+        """Canonicalize website URL for robust duplicate comparison.
+
+        Strips protocol, 'www.' prefix, trailing slashes, and lowercases.
+        e.g. 'https://www.ApexCoaching.com/' -> 'apexcoaching.com'
+
+        Args:
+            url: Raw website URL string.
+
+        Returns:
+            Canonical domain+path string, or None if invalid/empty.
+        """
+        if not url or not isinstance(url, str):
+            return None
+
+        clean = url.strip().lower()
+        if not clean:
+            return None
+
+        if not clean.startswith(("http://", "https://")):
+            clean = "http://" + clean
+
+        try:
+            parsed = urlparse(clean)
+            netloc = parsed.netloc.lower()
+            if netloc.startswith("www."):
+                netloc = netloc[4:]
+            path = parsed.path.rstrip("/")
+            if not netloc:
+                return None
+            return f"{netloc}{path}"
+        except Exception:
             return None
 
     @staticmethod
@@ -361,3 +397,252 @@ class DiscoveryService:
             logger.error(f"Failed to update campaign {campaign_id} spent_amount: {e}")
 
         return cost_payload
+
+    def deduplicate_batch(
+        self,
+        leads: list[dict[str, Any]],
+        campaign_id: str,
+        user_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Deduplicate candidate leads intra-batch and against existing campaign leads.
+
+        Per docs/implementation.md line 219:
+        Checks existing leads in campaign by place_id, phone, website_url.
+        Preserves only new, unique leads. If user_id is provided, campaign ownership
+        is verified before querying database records.
+
+        Args:
+            leads: List of candidate parsed lead dictionaries.
+            campaign_id: UUID of target campaign.
+            user_id: Optional UUID of user owning the campaign for tenant verification.
+
+        Returns:
+            List of strictly deduplicated lead records.
+        """
+        # Verify campaign ownership if user_id is provided
+        if user_id:
+            try:
+                camp_check = (
+                    self._db.table("campaigns")
+                    .select("id")
+                    .eq("id", campaign_id)
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                if not camp_check.data:
+                    logger.warning(f"Deduplication aborted: campaign {campaign_id} unowned by user {user_id}")
+                    return []
+            except Exception as e:
+                logger.error(f"Failed to verify campaign ownership during deduplication: {e}")
+                return []
+        # 1. Intra-batch deduplication
+        seen_place_ids: set[str] = set()
+        seen_phones: set[str] = set()
+        seen_websites: set[str] = set()
+        intra_unique: list[dict[str, Any]] = []
+
+        for lead in leads:
+            place_id = lead.get("place_id")
+            phone = lead.get("phone")
+            canon_url = self.canonicalize_url(lead.get("website_url"))
+
+            # Check if seen in current batch
+            if place_id and place_id in seen_place_ids:
+                continue
+            if phone and phone in seen_phones:
+                continue
+            if canon_url and canon_url in seen_websites:
+                continue
+
+            if place_id:
+                seen_place_ids.add(place_id)
+            if phone:
+                seen_phones.add(phone)
+            if canon_url:
+                seen_websites.add(canon_url)
+
+            intra_unique.append(lead)
+
+        # 2. Database-level deduplication against existing campaign records
+        existing_place_ids: set[str] = set()
+        existing_phones: set[str] = set()
+        existing_websites: set[str] = set()
+
+        try:
+            db_res = (
+                self._db.table("leads")
+                .select("place_id, phone, website_url")
+                .eq("campaign_id", campaign_id)
+                .execute()
+            )
+            for r in (db_res.data or []):
+                if r.get("place_id"):
+                    existing_place_ids.add(r["place_id"])
+                if r.get("phone"):
+                    existing_phones.add(r["phone"])
+                c_url = self.canonicalize_url(r.get("website_url"))
+                if c_url:
+                    existing_websites.add(c_url)
+        except Exception as e:
+            logger.error(f"Failed to fetch existing campaign leads for deduplication: {e}")
+
+        final_unique: list[dict[str, Any]] = []
+        for lead in intra_unique:
+            place_id = lead.get("place_id")
+            phone = lead.get("phone")
+            canon_url = self.canonicalize_url(lead.get("website_url"))
+
+            if place_id and place_id in existing_place_ids:
+                continue
+            if phone and phone in existing_phones:
+                continue
+            if canon_url and canon_url in existing_websites:
+                continue
+
+            final_unique.append(lead)
+
+        return final_unique
+
+    def get_user_suppressed_phones(
+        self,
+        user_id: str,
+        phones: list[str],
+    ) -> set[str]:
+        """Find phone numbers that were previously suppressed under any campaign of this user.
+
+        Per docs/decisions.md Section 10:
+        New leads discovered later with a suppressed phone are created already suppressed.
+
+        Args:
+            user_id: UUID of authenticated user.
+            phones: List of candidate E.164 phone numbers to check.
+
+        Returns:
+            Set of phone numbers that are currently suppressed.
+        """
+        if not phones or not user_id:
+            return set()
+
+        valid_phones = list({p for p in phones if p and isinstance(p, str)})
+        if not valid_phones:
+            return set()
+
+        try:
+            # 1. Fetch campaigns belonging to this user
+            camps_res = self._db.table("campaigns").select("id").eq("user_id", user_id).execute()
+            camp_ids = [c["id"] for c in (camps_res.data or []) if c.get("id")]
+            if not camp_ids:
+                return set()
+
+            # 2. Query suppressed leads across user's campaigns matching target phones
+            supp_res = (
+                self._db.table("leads")
+                .select("phone")
+                .in_("campaign_id", camp_ids)
+                .eq("is_suppressed", True)
+                .in_("phone", valid_phones)
+                .execute()
+            )
+            return {r["phone"] for r in (supp_res.data or []) if r.get("phone")}
+        except Exception as e:
+            logger.error(f"Failed checking suppressed phones for user {user_id}: {e}")
+            return set()
+
+    def ingest_leads(
+        self,
+        campaign_id: str,
+        user_id: str,
+        raw_places: list[dict[str, Any]],
+        max_leads: int | None = None,
+    ) -> dict[str, Any]:
+        """Ingest raw Google Places records into public.leads with deduplication and suppression.
+
+        Args:
+            campaign_id: UUID of campaign.
+            user_id: UUID of campaign owner.
+            raw_places: List of raw place dictionaries from Google Places API (New).
+            max_leads: Optional cap on maximum leads to insert.
+
+        Returns:
+            Dict containing counts of total_processed, inserted_count, duplicates_skipped,
+            suppressed_count, and list of ingested lead records.
+
+        Raises:
+            ValueError: If campaign does not exist or is not owned by user_id.
+        """
+        # Validate campaign ownership
+        camp_res = (
+            self._db.table("campaigns")
+            .select("id, total_leads_found")
+            .eq("id", campaign_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not camp_res.data:
+            raise ValueError(f"Campaign with ID '{campaign_id}' not found or unowned")
+
+        # 1. Parse raw places
+        parsed_leads: list[dict[str, Any]] = []
+        for p in raw_places:
+            if not isinstance(p, dict):
+                continue
+            lead = self.parse_place(p)
+            if lead.get("business_name"):
+                parsed_leads.append(lead)
+
+        # 2. Deduplicate intra-batch and against campaign database
+        unique_leads = self.deduplicate_batch(parsed_leads, campaign_id, user_id=user_id)
+
+        # Apply max_leads cap if requested
+        if max_leads is not None and max_leads > 0:
+            unique_leads = unique_leads[:max_leads]
+
+        # 3. Check suppression inheritance
+        candidate_phones = [l["phone"] for l in unique_leads if l.get("phone")]
+        suppressed_phones = self.get_user_suppressed_phones(user_id, candidate_phones)
+
+        for lead in unique_leads:
+            lead["campaign_id"] = campaign_id
+            if lead.get("phone") and lead["phone"] in suppressed_phones:
+                lead["is_suppressed"] = True
+                lead["suppression_reason"] = "Previously opted out by user"
+                lead["pipeline_stage"] = "opted_out"
+            else:
+                lead["is_suppressed"] = False
+                lead["pipeline_stage"] = "discovered"
+
+        # 4. Batch insert into public.leads in chunks of 50
+        inserted_records: list[dict[str, Any]] = []
+        if unique_leads:
+            chunk_size = 50
+            for i in range(0, len(unique_leads), chunk_size):
+                chunk = unique_leads[i : i + chunk_size]
+                try:
+                    res = self._db.table("leads").insert(chunk).execute()
+                    if res.data:
+                        inserted_records.extend(res.data)
+                except Exception as e:
+                    logger.error(f"Failed to insert lead batch into database for campaign {campaign_id}: {e}")
+                    raise
+
+            # 5. Update campaign total_leads_found
+            try:
+                current_found = int(camp_res.data[0].get("total_leads_found") or 0)
+                new_total = current_found + len(unique_leads)
+                (
+                    self._db.table("campaigns")
+                    .update({"total_leads_found": new_total})
+                    .eq("id", campaign_id)
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+            except Exception as e:
+                logger.error(f"Failed updating total_leads_found for campaign {campaign_id}: {e}")
+
+        return {
+            "total_processed": len(raw_places),
+            "inserted_count": len(unique_leads),
+            "duplicates_skipped": len(raw_places) - len(unique_leads),
+            "suppressed_count": sum(1 for l in unique_leads if l.get("is_suppressed")),
+            "leads": inserted_records if inserted_records else unique_leads,
+        }
