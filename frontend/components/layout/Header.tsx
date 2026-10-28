@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -107,16 +108,18 @@ export function Header({ userProfile, onMobileMenuToggle }: HeaderProps) {
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-xs font-medium leading-none text-foreground truncate">
-                  {userProfile?.full_name || "User"}
-                </p>
-                <p className="text-[11px] leading-none text-muted-foreground truncate">
-                  {userProfile?.email}
-                </p>
-              </div>
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-xs font-medium leading-none text-foreground truncate">
+                    {userProfile?.full_name || "User"}
+                  </p>
+                  <p className="text-[11px] leading-none text-muted-foreground truncate">
+                    {userProfile?.email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
 
             <DropdownMenuItem
@@ -130,36 +133,38 @@ export function Header({ userProfile, onMobileMenuToggle }: HeaderProps) {
             <DropdownMenuSeparator />
 
             {/* Theme Switcher per UI-UX.md Section 4 */}
-            <DropdownMenuLabel className="text-[11px] text-muted-foreground uppercase tracking-wider py-1 font-medium">
-              Theme
-            </DropdownMenuLabel>
-            <DropdownMenuItem
-              onClick={() => setTheme("light")}
-              className={`text-xs flex items-center gap-2 cursor-pointer ${
-                theme === "light" ? "text-primary font-medium" : ""
-              }`}
-            >
-              <Sun className="h-3.5 w-3.5" />
-              Light
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setTheme("dark")}
-              className={`text-xs flex items-center gap-2 cursor-pointer ${
-                theme === "dark" ? "text-primary font-medium" : ""
-              }`}
-            >
-              <Moon className="h-3.5 w-3.5" />
-              Dark
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => setTheme("system")}
-              className={`text-xs flex items-center gap-2 cursor-pointer ${
-                theme === "system" ? "text-primary font-medium" : ""
-              }`}
-            >
-              <Laptop className="h-3.5 w-3.5" />
-              System
-            </DropdownMenuItem>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-[11px] text-muted-foreground uppercase tracking-wider py-1 font-medium">
+                Theme
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                onClick={() => setTheme("light")}
+                className={`text-xs flex items-center gap-2 cursor-pointer ${
+                  theme === "light" ? "text-primary font-medium" : ""
+                }`}
+              >
+                <Sun className="h-3.5 w-3.5" />
+                Light
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setTheme("dark")}
+                className={`text-xs flex items-center gap-2 cursor-pointer ${
+                  theme === "dark" ? "text-primary font-medium" : ""
+                }`}
+              >
+                <Moon className="h-3.5 w-3.5" />
+                Dark
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setTheme("system")}
+                className={`text-xs flex items-center gap-2 cursor-pointer ${
+                  theme === "system" ? "text-primary font-medium" : ""
+                }`}
+              >
+                <Laptop className="h-3.5 w-3.5" />
+                System
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
 
             <DropdownMenuSeparator />
 
