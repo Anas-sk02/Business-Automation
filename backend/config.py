@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     DAILY_SEND_LIMIT: int = 50
     QUIET_HOURS_START: str = "21:00"
     QUIET_HOURS_END: str = "09:00"
+    USD_TO_INR_RATE: float = 86.0
+    GOOGLE_PLACES_COST_PER_SEARCH_USD: float = 0.035
 
     # Web & Server
     CORS_ORIGINS: str = "http://localhost:3000"
