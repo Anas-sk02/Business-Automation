@@ -5,6 +5,8 @@ integration with field masking, E.164 phone normalization, budget enforcement,
 and audit cost tracking in public.api_costs.
 """
 
+import asyncio
+from datetime import datetime, timezone
 import logging
 from typing import Any
 from urllib.parse import urlparse
@@ -34,6 +36,24 @@ PLACES_FIELD_MASK = (
     "places.types,"
     "nextPageToken"
 )
+
+# Concurrency limits: discovery 1 per user per docs/decisions.md Section 9
+_user_discovery_semaphores: dict[str, asyncio.Semaphore] = {}
+_semaphore_lock = asyncio.Lock()
+
+
+async def get_user_semaphore(user_id: str) -> asyncio.Semaphore:
+    """Get or create the asyncio.Semaphore for a user (1 concurrent discovery per user)."""
+    async with _semaphore_lock:
+        if user_id not in _user_discovery_semaphores:
+            _user_discovery_semaphores[user_id] = asyncio.Semaphore(1)
+        return _user_discovery_semaphores[user_id]
+
+
+def reset_user_semaphores() -> None:
+    """Reset user semaphores (primarily for testing purposes)."""
+    _user_discovery_semaphores.clear()
+
 
 
 class DiscoveryService:
@@ -315,17 +335,53 @@ class DiscoveryService:
                 logger.error(f"Google Places API network connection failure on query '{query}'")
                 raise RuntimeError(f"Google Places API network request failed: {re}") from re
 
-        if client is not None:
-            resp = await _do_post(client)
-        else:
-            async with httpx.AsyncClient() as default_client:
-                resp = await _do_post(default_client)
+        max_retries = 2
+        resp = None
 
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as he:
-            logger.error(f"Google Places API HTTP error {he.response.status_code}")
-            raise
+        for attempt in range(max_retries + 1):
+            try:
+                if client is not None:
+                    resp = await _do_post(client)
+                else:
+                    async with httpx.AsyncClient() as default_client:
+                        resp = await _do_post(default_client)
+
+                # Retry on rate limit (429) or transient service unavailability (503)
+                if resp.status_code in (429, 503) and attempt < max_retries:
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        f"Google Places API responded with {resp.status_code}. "
+                        f"Retrying query '{query}' in {backoff}s (attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+
+                resp.raise_for_status()
+                break
+            except RuntimeError as re:
+                if attempt < max_retries:
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        f"Google Places API error: {re}. Retrying in {backoff}s "
+                        f"(attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                raise
+            except httpx.HTTPStatusError as he:
+                if he.response.status_code in (429, 503) and attempt < max_retries:
+                    backoff = 1.0 * (2 ** attempt)
+                    logger.warning(
+                        f"Google Places HTTP {he.response.status_code}. Retrying in {backoff}s "
+                        f"(attempt {attempt + 1}/{max_retries})..."
+                    )
+                    await asyncio.sleep(backoff)
+                    continue
+                logger.error(f"Google Places API HTTP error {he.response.status_code}")
+                raise
+
+        if resp is None:
+            raise RuntimeError(f"Google Places API request failed after {max_retries} retries.")
 
         data = resp.json()
         places = data.get("places", [])
@@ -646,3 +702,162 @@ class DiscoveryService:
             "suppressed_count": sum(1 for l in unique_leads if l.get("is_suppressed")),
             "leads": inserted_records if inserted_records else unique_leads,
         }
+
+    async def run_discovery_job(
+        self,
+        campaign_id: str,
+        user_id: str,
+        queries: list[str] | None = None,
+        client: httpx.AsyncClient | None = None,
+    ) -> dict[str, Any]:
+        """Orchestrate background business discovery process for a campaign.
+
+        Per docs/decisions.md Section 9:
+        - Concurrency limits via asyncio.Semaphore: discovery 1 per user.
+        - Job state lives in the database (campaigns table), never in memory.
+        - Enforces budget limit before each search query.
+        - Progress (queries completed, leads found) updated after each query.
+
+        Args:
+            campaign_id: UUID of campaign.
+            user_id: UUID of owner user.
+            queries: Optional pre-generated query list.
+            client: Optional httpx.AsyncClient for testing / custom transport.
+
+        Returns:
+            Dict summary of execution.
+        """
+        sem = await get_user_semaphore(user_id)
+        async with sem:
+            try:
+                # 1. Fetch campaign record ensuring ownership
+                camp_res = (
+                    self._db.table("campaigns")
+                    .select("*")
+                    .eq("id", campaign_id)
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                if not camp_res.data:
+                    logger.error(f"Discovery job failed: Campaign {campaign_id} not found for user {user_id}")
+                    return {"status": "failed", "error": "Campaign not found"}
+
+                campaign = camp_res.data[0]
+                industry = campaign.get("industry_label") or campaign.get("industry")
+                location = campaign.get("location")
+                keywords = campaign.get("keywords") or []
+                target_leads = int(campaign.get("target_leads") or 50)
+                min_rating = float(campaign.get("min_rating") or 0.0)
+
+                if not queries:
+                    queries = self.generate_queries(industry, location, keywords)
+
+                # Ensure campaign state in DB is marked 'discovering'
+                now_iso = datetime.now(timezone.utc).isoformat()
+                self._db.table("campaigns").update({
+                    "status": "discovering",
+                    "discovery_queries_total": len(queries),
+                    "started_at": campaign.get("started_at") or now_iso,
+                    "completed_at": None,
+                }).eq("id", campaign_id).eq("user_id", user_id).execute()
+
+                queries_completed = int(campaign.get("discovery_queries_completed") or 0)
+                total_leads_found = int(campaign.get("total_leads_found") or 0)
+                halt_reason = None
+
+                for query in queries[queries_completed:]:
+                    # Check if target leads already satisfied
+                    if total_leads_found >= target_leads:
+                        logger.info(
+                            f"Campaign {campaign_id} target leads reached "
+                            f"({total_leads_found}/{target_leads}). Stopping early."
+                        )
+                        halt_reason = "target_leads_reached"
+                        break
+
+                    # Budget check before performing paid API call
+                    camp_check = (
+                        self._db.table("campaigns")
+                        .select("spent_amount, max_budget")
+                        .eq("id", campaign_id)
+                        .eq("user_id", user_id)
+                        .execute()
+                    )
+                    camp_budget_data = camp_check.data[0] if camp_check.data else campaign
+                    if not self.check_budget(camp_budget_data):
+                        logger.warning(f"Campaign {campaign_id} budget exceeded. Halting discovery.")
+                        halt_reason = "budget_exceeded"
+                        break
+
+                    # Perform Places Text Search
+                    raw_places: list[dict[str, Any]] = []
+                    try:
+                        places, _ = await self.search_places(query, client=client)
+                        raw_places = places or []
+                    except Exception as e:
+                        logger.error(
+                            f"Places search failed on query '{query}' for campaign {campaign_id}: {e}"
+                        )
+
+                    # Log external API call cost and update spent_amount in public.api_costs & campaigns
+                    self.log_api_cost(
+                        campaign_id=campaign_id,
+                        operation="text_search",
+                        api_calls=1,
+                        metadata={"query": query, "results_count": len(raw_places)},
+                        user_id=user_id,
+                    )
+
+                    # Filter by min_rating if configured
+                    if min_rating > 0.0 and raw_places:
+                        filtered_places = []
+                        for p in raw_places:
+                            r = p.get("rating")
+                            if r is None or float(r) >= min_rating:
+                                filtered_places.append(p)
+                        raw_places = filtered_places
+
+                    # Ingest new leads with deduplication and suppression
+                    remaining_cap = target_leads - total_leads_found
+                    if raw_places and remaining_cap > 0:
+                        ingest_summary = self.ingest_leads(
+                            campaign_id=campaign_id,
+                            user_id=user_id,
+                            raw_places=raw_places,
+                            max_leads=remaining_cap,
+                        )
+                        total_leads_found += ingest_summary["inserted_count"]
+
+                    queries_completed += 1
+                    self._db.table("campaigns").update({
+                        "discovery_queries_completed": queries_completed,
+                    }).eq("id", campaign_id).eq("user_id", user_id).execute()
+
+                # Mark discovery as complete
+                complete_iso = datetime.now(timezone.utc).isoformat()
+                self._db.table("campaigns").update({
+                    "status": "discovery_complete",
+                    "completed_at": complete_iso,
+                }).eq("id", campaign_id).eq("user_id", user_id).execute()
+
+                return {
+                    "status": "discovery_complete",
+                    "queries_completed": queries_completed,
+                    "total_leads_found": total_leads_found,
+                    "halt_reason": halt_reason,
+                }
+
+            except Exception as e:
+                logger.error(
+                    f"Unexpected fatal error in discovery job for campaign {campaign_id}: {e}",
+                    exc_info=True,
+                )
+                # Recover campaign status to draft so it does not remain stuck in 'discovering'
+                try:
+                    self._db.table("campaigns").update({
+                        "status": "draft",
+                    }).eq("id", campaign_id).eq("user_id", user_id).execute()
+                except Exception as db_err:
+                    logger.error(f"Failed to reset campaign status on error: {db_err}")
+                raise
+

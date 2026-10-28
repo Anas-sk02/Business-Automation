@@ -1,3 +1,4 @@
+from datetime import datetime, timezone, timedelta
 import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -8,8 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
 
-
 from backend.config import settings
+from backend.database import get_supabase_client
 
 logger = logging.getLogger("signalforge")
 logging.basicConfig(
@@ -18,12 +19,40 @@ logging.basicConfig(
 )
 
 
+async def recover_stale_discovery_jobs() -> int:
+    """Reset campaigns stuck in discovering for > 15 minutes per docs/decisions.md Section 9."""
+    try:
+        db = get_supabase_client()
+        fifteen_mins_ago = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+
+        stale_res = (
+            db.table("campaigns")
+            .select("id")
+            .eq("status", "discovering")
+            .lt("started_at", fifteen_mins_ago)
+            .execute()
+        )
+        if stale_res.data:
+            stale_ids = [r["id"] for r in stale_res.data]
+            db.table("campaigns").update({"status": "draft"}).in_("id", stale_ids).execute()
+            logger.warning(f"Startup recovery: reset {len(stale_ids)} stale discovering campaign(s) to draft: {stale_ids}")
+            return len(stale_ids)
+        return 0
+    except Exception as exc:
+        logger.error(f"Error during startup discovery job recovery: {exc}", exc_info=True)
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan handler for server startup and shutdown."""
     logger.info("SignalForge AI backend starting up...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Supabase configured: {bool(settings.SUPABASE_URL)}")
+
+    # Run background recovery on startup (docs/decisions.md Section 9)
+    await recover_stale_discovery_jobs()
+
     yield
     logger.info("SignalForge AI backend shutting down...")
 
