@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { Campaign, ResponseEnvelope, CampaignStatus, StartDiscoveryResponse, DiscoveryStatus } from "@/types";
 import { DiscoveryProgress } from "@/components/campaign/DiscoveryProgress";
+import { LeadTable } from "@/components/lead/LeadTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -106,10 +107,12 @@ function CampaignDetailContent({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [confirmNameInput, setConfirmNameInput] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const [tableRefreshKey, setTableRefreshKey] = useState(0);
 
   const handleRetry = () => {
     setIsLoading(true);
     setLoadError(null);
+    setTableRefreshKey((k) => k + 1);
     api.get<ResponseEnvelope<Campaign>>(`/api/campaigns/${campaignId}`)
       .then((response) => {
         setCampaign(response.data);
@@ -208,18 +211,20 @@ function CampaignDetailContent({
   };
 
   const handleStatusChange = (statusData: DiscoveryStatus) => {
-    setCampaign((prev) =>
-      prev
-        ? {
-            ...prev,
-            status: statusData.status,
-            total_leads_found: statusData.total_leads_found,
-            discovery_queries_completed: statusData.discovery_queries_completed,
-            discovery_queries_total: statusData.discovery_queries_total,
-            spent_amount: statusData.spent_amount,
-          }
-        : null
-    );
+    setCampaign((prev) => {
+      if (!prev) return null;
+      if (prev.total_leads_found !== statusData.total_leads_found) {
+        setTableRefreshKey((k) => k + 1);
+      }
+      return {
+        ...prev,
+        status: statusData.status,
+        total_leads_found: statusData.total_leads_found,
+        discovery_queries_completed: statusData.discovery_queries_completed,
+        discovery_queries_total: statusData.discovery_queries_total,
+        spent_amount: statusData.spent_amount,
+      };
+    });
   };
 
   if (isLoading) {
@@ -543,50 +548,19 @@ function CampaignDetailContent({
         onComplete={handleRetry}
       />
 
-      {/* Leads Table Section (Stage 1 Honest Empty State) */}
+      {/* Leads Table Section per UI-UX.md Section 6.5 */}
       <section className="space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-base font-semibold text-foreground">
             Leads in this campaign
           </h2>
-          <div className="relative w-64">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              disabled
-              placeholder="Filter leads (Stage 2 Task 6)..."
-              className="h-8 pl-8 text-xs bg-muted/40 cursor-not-allowed"
-            />
-          </div>
         </div>
 
-        <div className="rounded-md border border-border bg-card p-12 text-center space-y-3">
-          <p className="text-sm text-foreground font-medium">
-            {campaign.total_leads_found > 0
-              ? `${campaign.total_leads_found} lead(s) discovered for this campaign.`
-              : "No leads discovered yet."}
-          </p>
-          <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            {campaign.total_leads_found > 0
-              ? "The interactive sortable & filterable lead table will be rendered here in Stage 2, Task 6."
-              : "Click 'Start Discovery' above to search Google Places for businesses matching your targeting criteria."}
-          </p>
-          {campaign.total_leads_found === 0 &&
-            (campaign.status === "draft" || campaign.status === "discovery_complete") && (
-              <Button
-                size="sm"
-                onClick={handleStartDiscovery}
-                disabled={actionLoading}
-                className="mt-2 text-xs"
-              >
-                {actionLoading ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Search className="mr-1.5 h-3.5 w-3.5" />
-                )}
-                Start discovery
-              </Button>
-            )}
-        </div>
+        <LeadTable
+          campaignId={campaign.id}
+          totalLeadsCount={campaign.total_leads_found}
+          refreshTrigger={tableRefreshKey}
+        />
       </section>
 
       {/* Delete Campaign Confirmation Dialog per UI-UX.md Section 5.9 */}

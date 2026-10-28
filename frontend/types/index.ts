@@ -114,19 +114,49 @@ export interface UpdateCampaignInput {
 export interface Lead {
   id: string;
   campaign_id: string;
+  place_id?: string | null;
   business_name: string;
-  category?: string;
-  address?: string;
-  city?: string;
+  category?: string | null;
+  subcategories?: string[];
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   phone?: string | null;
   email?: string | null;
   website_url?: string | null;
   rating?: number | null;
   review_count?: number | null;
+  business_status?: string | null;
+  opening_hours?: Record<string, unknown>;
   fit_score?: number | null;
+  score_breakdown?: Record<string, unknown>;
+  score_reasons?: string[];
   pipeline_stage: PipelineStage;
+  source?: string | null;
+  is_duplicate?: boolean;
+  duplicate_of?: string | null;
+  notes?: string | null;
+  is_suppressed?: boolean;
+  suppression_reason?: string | null;
   created_at: string;
   updated_at?: string;
+}
+
+export interface LeadQueryParams {
+  page?: number;
+  page_size?: number;
+  min_score?: number;
+  max_score?: number;
+  stage?: PipelineStage;
+  has_website?: boolean;
+  has_phone?: boolean;
+  is_suppressed?: boolean;
+  search?: string;
+  sort_by?: "fit_score" | "business_name" | "created_at" | "rating";
+  sort_order?: "asc" | "desc";
 }
 
 export interface UserProfile {
