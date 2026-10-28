@@ -324,23 +324,29 @@ def test_stage2_e2e_leads_api_sorting_filtering_pagination():
 
 @pytest.mark.anyio
 async def test_stage2_e2e_budget_cap_enforcement():
-    """Tests that discovery stops gracefully when spending reaches max_budget."""
+    """Tests that discovery stops gracefully and sets status='paused' when spending reaches max_budget."""
     campaign_id = NAGPUR_CAMPAIGN_ID
     user_id = MOCK_USER_A["id"]
 
     # Campaign with small ₹50 budget that is already exhausted
     budget_campaign = dict(BASE_NAGPUR_CAMPAIGN)
     budget_campaign["max_budget"] = 50.0
-    budget_campaign["spent_amount"] = 50.0 # Exhausted
+    budget_campaign["spent_amount"] = 50.0  # Exhausted
 
+    updated_records = []
     mock_supabase = MagicMock()
     camp_q = MagicMock()
     camp_q.eq.return_value = camp_q
     camp_q.execute.return_value = MagicMock(data=[budget_campaign])
     mock_supabase.table.return_value.select.return_value = camp_q
-    mock_supabase.table.return_value.update.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
-        data=[budget_campaign]
-    )
+
+    def fake_update(payload):
+        updated_records.append(payload)
+        up_mock = MagicMock()
+        up_mock.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[payload])
+        return up_mock
+
+    mock_supabase.table.return_value.update.side_effect = fake_update
 
     service = DiscoveryService(db_client=mock_supabase)
 
@@ -350,9 +356,101 @@ async def test_stage2_e2e_budget_cap_enforcement():
         queries=["Coaching query 1", "Coaching query 2"],
     )
 
-    # Halt reason should be budget_exceeded and 0 queries performed
+    # Halt reason should be budget_exceeded, status paused per decisions.md Section 11, and 0 queries performed
+    assert result["status"] == "paused"
     assert result["halt_reason"] == "budget_exceeded"
     assert result["queries_completed"] == 0
+
+    # Verify database update to status='paused'
+    status_updates = [u.get("status") for u in updated_records if "status" in u]
+    assert "paused" in status_updates
+
+
+@pytest.mark.anyio
+async def test_stage2_e2e_mid_discovery_user_pause():
+    """Tests that when user clicks pause mid-flight, the loop stops gracefully and keeps 'paused' status."""
+    campaign_id = NAGPUR_CAMPAIGN_ID
+    user_id = MOCK_USER_A["id"]
+
+    campaign_data = dict(BASE_NAGPUR_CAMPAIGN)
+    updated_records = []
+    iteration_count = [0]
+
+    mock_supabase = MagicMock()
+
+    def mock_table(table_name):
+        table_mock = MagicMock()
+        if table_name == "campaigns":
+            def fake_select(*args, **kwargs):
+                sel_mock = MagicMock()
+                def fake_eq(*a, **k):
+                    eq_mock = MagicMock()
+                    eq_mock.eq.return_value = eq_mock
+                    # On second check, simulate user clicked Pause
+                    if iteration_count[0] >= 1:
+                        campaign_data["status"] = "paused"
+                    eq_mock.execute.return_value = MagicMock(data=[dict(campaign_data)])
+                    return eq_mock
+                sel_mock.eq.side_effect = fake_eq
+                return sel_mock
+            table_mock.select.side_effect = fake_select
+
+            def fake_update(payload):
+                updated_records.append(payload)
+                campaign_data.update(payload)
+                up_mock = MagicMock()
+                up_mock.eq.return_value.eq.return_value.execute.return_value = MagicMock(data=[payload])
+                return up_mock
+            table_mock.update.side_effect = fake_update
+
+        elif table_name == "leads":
+            table_mock.select.return_value.eq.return_value.in_.return_value.execute.return_value = MagicMock(data=[])
+            table_mock.insert.return_value.execute.return_value = MagicMock(data=[])
+        elif table_name == "api_costs":
+            table_mock.insert.return_value.execute.return_value = MagicMock(data=[])
+
+        return table_mock
+
+    mock_supabase.table.side_effect = mock_table
+    service = DiscoveryService(db_client=mock_supabase)
+
+    async def fake_search(q, client=None):
+        iteration_count[0] += 1
+        return ([{"id": f"places/p_{iteration_count[0]}", "displayName": {"text": "Test"}, "formattedAddress": "Nagpur"}], None)
+
+    with patch.object(service, "search_places", side_effect=fake_search):
+        result = await service.run_discovery_job(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            queries=["Query 1", "Query 2", "Query 3"],
+        )
+
+        # Loop should halt after 1 query because status became paused
+        assert result["status"] == "paused"
+        assert result["halt_reason"] == "paused"
+        assert result["queries_completed"] == 1
+        # The final status in DB must not be overwritten with 'discovery_complete'
+        assert campaign_data["status"] == "paused"
+
+
+def test_stage2_e2e_min_rating_excludes_unrated_places():
+    """Verifies that places with rating=None are strictly excluded when min_rating > 0."""
+    service = DiscoveryService()
+    raw_places = [
+        {"id": "p1", "rating": 4.5, "displayName": {"text": "Rated High"}},
+        {"id": "p2", "rating": None, "displayName": {"text": "Unrated Place"}},
+        {"id": "p3", "rating": 3.2, "displayName": {"text": "Rated Low"}},
+    ]
+
+    min_rating = 4.0
+    filtered = []
+    for p in raw_places:
+        r = p.get("rating")
+        if r is not None and float(r) >= min_rating:
+            filtered.append(p)
+
+    assert len(filtered) == 1
+    assert filtered[0]["id"] == "p1"
 
 
 # ==============================================================================

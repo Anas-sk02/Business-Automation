@@ -270,8 +270,8 @@ async def test_run_discovery_job_full_flow():
 
     # Mock search_places and ingest_leads
     mock_places = [
-        {"id": "p1", "displayName": {"text": "Apex Institute"}, "internationalPhoneNumber": "+91 712 254 1111"},
-        {"id": "p2", "displayName": {"text": "Allen Classes"}, "internationalPhoneNumber": "+91 712 254 2222"},
+        {"id": "p1", "displayName": {"text": "Apex Institute"}, "internationalPhoneNumber": "+91 712 254 1111", "rating": 4.5},
+        {"id": "p2", "displayName": {"text": "Allen Classes"}, "internationalPhoneNumber": "+91 712 254 2222", "rating": 4.5},
     ]
 
     with patch.object(service, "search_places", new_callable=AsyncMock) as mock_search, \
@@ -330,7 +330,7 @@ async def test_run_discovery_job_halts_on_budget_exceeded():
             queries=queries,
         )
 
-        assert result["status"] == "discovery_complete"
+        assert result["status"] == "paused"
         assert result["halt_reason"] == "budget_exceeded"
         # Search should not have been called because budget was checked before search
         assert mock_search.call_count == 0
@@ -354,7 +354,7 @@ async def test_run_discovery_job_halts_on_target_leads_reached():
          patch.object(service, "ingest_leads") as mock_ingest, \
          patch.object(service, "log_api_cost"):
 
-        mock_search.return_value = ([{"id": "p1"}], None)
+        mock_search.return_value = ([{"id": "p1", "rating": 4.5}], None)
         # First query inserts 5 leads directly reaching target
         mock_ingest.return_value = {"inserted_count": 5}
 

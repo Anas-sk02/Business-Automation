@@ -767,6 +767,7 @@ class DiscoveryService:
 
                 for query in queries[queries_completed:]:
                     # Check if target leads already satisfied
+                    # Check if target leads already satisfied
                     if total_leads_found >= target_leads:
                         logger.info(
                             f"Campaign {campaign_id} target leads reached "
@@ -775,16 +776,24 @@ class DiscoveryService:
                         halt_reason = "target_leads_reached"
                         break
 
-                    # Budget check before performing paid API call
+                    # Check campaign status on every iteration per docs/decisions.md Section 9 & 11
                     camp_check = (
                         self._db.table("campaigns")
-                        .select("spent_amount, max_budget")
+                        .select("spent_amount, max_budget, status")
                         .eq("id", campaign_id)
                         .eq("user_id", user_id)
                         .execute()
                     )
-                    camp_budget_data = camp_check.data[0] if camp_check.data else campaign
-                    if not self.check_budget(camp_budget_data):
+                    camp_data = camp_check.data[0] if camp_check.data else campaign
+
+                    # 1. Graceful exit if user clicked Pause mid-discovery
+                    if camp_data.get("status") == "paused":
+                        logger.info(f"Campaign {campaign_id} was paused by user. Halting discovery gracefully.")
+                        halt_reason = "paused"
+                        break
+
+                    # 2. Budget check before performing paid API call (transition to paused if exceeded)
+                    if not self.check_budget(camp_data):
                         logger.warning(f"Campaign {campaign_id} budget exceeded. Halting discovery.")
                         halt_reason = "budget_exceeded"
                         break
@@ -808,12 +817,12 @@ class DiscoveryService:
                         user_id=user_id,
                     )
 
-                    # Filter by min_rating if configured
+                    # Filter by min_rating if configured (exclude places with no rating or below min_rating)
                     if min_rating > 0.0 and raw_places:
                         filtered_places = []
                         for p in raw_places:
                             r = p.get("rating")
-                            if r is None or float(r) >= min_rating:
+                            if r is not None and float(r) >= min_rating:
                                 filtered_places.append(p)
                         raw_places = filtered_places
 
@@ -833,15 +842,27 @@ class DiscoveryService:
                         "discovery_queries_completed": queries_completed,
                     }).eq("id", campaign_id).eq("user_id", user_id).execute()
 
-                # Mark discovery as complete
-                complete_iso = datetime.now(timezone.utc).isoformat()
-                self._db.table("campaigns").update({
-                    "status": "discovery_complete",
-                    "completed_at": complete_iso,
-                }).eq("id", campaign_id).eq("user_id", user_id).execute()
+                # Determine final status update based on halt reason
+                if halt_reason == "paused":
+                    final_status = "paused"
+                    logger.info(f"Discovery stopped for campaign {campaign_id} due to user pause.")
+                elif halt_reason == "budget_exceeded":
+                    final_status = "paused"
+                    self._db.table("campaigns").update({
+                        "status": "paused",
+                        "completed_at": None,
+                    }).eq("id", campaign_id).eq("user_id", user_id).execute()
+                    logger.info(f"Campaign {campaign_id} transitioned to paused due to budget limit.")
+                else:
+                    final_status = "discovery_complete"
+                    complete_iso = datetime.now(timezone.utc).isoformat()
+                    self._db.table("campaigns").update({
+                        "status": "discovery_complete",
+                        "completed_at": complete_iso,
+                    }).eq("id", campaign_id).eq("user_id", user_id).execute()
 
                 return {
-                    "status": "discovery_complete",
+                    "status": final_status,
                     "queries_completed": queries_completed,
                     "total_leads_found": total_leads_found,
                     "halt_reason": halt_reason,

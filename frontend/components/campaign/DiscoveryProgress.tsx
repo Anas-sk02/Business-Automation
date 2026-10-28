@@ -147,7 +147,7 @@ export function DiscoveryProgress({
           <div className="flex items-start space-x-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-500">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div className="space-y-0.5">
-              <p className="font-medium">Approaching Campaign Budget Limit (80%+)</p>
+              <p className="font-medium">Approaching campaign budget limit (80%+)</p>
               <p className="text-xs text-amber-500/80">
                 You have spent ₹{statusData.spent_amount.toFixed(2)} of your ₹
                 {statusData.max_budget.toFixed(2)} budget. Discovery will stop when the budget is reached.

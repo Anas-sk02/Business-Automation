@@ -405,7 +405,7 @@ function CampaignDetailContent({
       <section className="p-4 rounded-md bg-card border border-border">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-border">
           <div className="space-y-1">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               Discovery
             </span>
             <div className="text-sm font-semibold text-foreground tabular-nums">
@@ -417,7 +417,7 @@ function CampaignDetailContent({
           </div>
 
           <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               Audit
             </span>
             <div className="text-sm font-semibold text-foreground tabular-nums">
@@ -429,7 +429,7 @@ function CampaignDetailContent({
           </div>
 
           <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               Analysis
             </span>
             <div className="text-sm font-semibold text-foreground tabular-nums">
@@ -441,7 +441,7 @@ function CampaignDetailContent({
           </div>
 
           <div className="space-y-1 pt-3 md:pt-0 md:pl-4">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground">
               Drafts
             </span>
             <div className="text-sm font-semibold text-foreground tabular-nums">
