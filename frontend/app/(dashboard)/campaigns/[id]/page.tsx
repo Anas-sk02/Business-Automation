@@ -4,7 +4,8 @@ import { useEffect, useState, use, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import type { Campaign, ResponseEnvelope, CampaignStatus } from "@/types";
+import type { Campaign, ResponseEnvelope, CampaignStatus, StartDiscoveryResponse, DiscoveryStatus } from "@/types";
+import { DiscoveryProgress } from "@/components/campaign/DiscoveryProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -178,6 +179,49 @@ function CampaignDetailContent({
     }
   };
 
+  const handleStartDiscovery = async () => {
+    if (!campaign) return;
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await api.post<ResponseEnvelope<StartDiscoveryResponse>>(
+        `/api/campaigns/${campaign.id}/start-discovery`
+      );
+      if (res?.data) {
+        setCampaign((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "discovering",
+                discovery_queries_total: res.data.queries_total,
+                discovery_queries_completed: 0,
+              }
+            : null
+        );
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start discovery process.";
+      setActionError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleStatusChange = (statusData: DiscoveryStatus) => {
+    setCampaign((prev) =>
+      prev
+        ? {
+            ...prev,
+            status: statusData.status,
+            total_leads_found: statusData.total_leads_found,
+            discovery_queries_completed: statusData.discovery_queries_completed,
+            discovery_queries_total: statusData.discovery_queries_total,
+            spent_amount: statusData.spent_amount,
+          }
+        : null
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -267,6 +311,34 @@ function CampaignDetailContent({
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Start Discovery action */}
+            {(campaign.status === "draft" || campaign.status === "discovery_complete") && (
+              <Button
+                size="sm"
+                disabled={actionLoading}
+                onClick={handleStartDiscovery}
+                className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Search className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                {campaign.status === "discovery_complete" ? "Discover more leads" : "Start discovery"}
+              </Button>
+            )}
+
+            {campaign.status === "discovering" && (
+              <Button
+                size="sm"
+                disabled
+                className="h-8 text-xs bg-primary/70 text-primary-foreground cursor-not-allowed"
+              >
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Discovering...
+              </Button>
+            )}
+
             {/* Pause / Resume action */}
             {campaign.status === "active" && (
               <Button
@@ -455,6 +527,22 @@ function CampaignDetailContent({
         </div>
       </div>
 
+      {/* Discovery Progress Tracker (Active during & after discovery) */}
+      <DiscoveryProgress
+        campaignId={campaign.id}
+        status={campaign.status}
+        initialProgress={{
+          discovery_queries_total: campaign.discovery_queries_total,
+          discovery_queries_completed: campaign.discovery_queries_completed,
+          total_leads_found: campaign.total_leads_found,
+          target_leads: campaign.target_leads,
+          spent_amount: campaign.spent_amount,
+          max_budget: campaign.max_budget,
+        }}
+        onStatusChange={handleStatusChange}
+        onComplete={handleRetry}
+      />
+
       {/* Leads Table Section (Stage 1 Honest Empty State) */}
       <section className="space-y-4">
         <div className="flex justify-between items-center">
@@ -465,7 +553,7 @@ function CampaignDetailContent({
             <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               disabled
-              placeholder="Filter leads (Stage 2)..."
+              placeholder="Filter leads (Stage 2 Task 6)..."
               className="h-8 pl-8 text-xs bg-muted/40 cursor-not-allowed"
             />
           </div>
@@ -473,11 +561,31 @@ function CampaignDetailContent({
 
         <div className="rounded-md border border-border bg-card p-12 text-center space-y-3">
           <p className="text-sm text-foreground font-medium">
-            No leads discovered yet.
+            {campaign.total_leads_found > 0
+              ? `${campaign.total_leads_found} lead(s) discovered for this campaign.`
+              : "No leads discovered yet."}
           </p>
           <p className="text-xs text-muted-foreground max-w-md mx-auto">
-            Lead discovery using Google Places Text Search is part of Stage 2. Once initiated, discovered businesses will appear here in the real-time review ledger.
+            {campaign.total_leads_found > 0
+              ? "The interactive sortable & filterable lead table will be rendered here in Stage 2, Task 6."
+              : "Click 'Start Discovery' above to search Google Places for businesses matching your targeting criteria."}
           </p>
+          {campaign.total_leads_found === 0 &&
+            (campaign.status === "draft" || campaign.status === "discovery_complete") && (
+              <Button
+                size="sm"
+                onClick={handleStartDiscovery}
+                disabled={actionLoading}
+                className="mt-2 text-xs"
+              >
+                {actionLoading ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Search className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Start discovery
+              </Button>
+            )}
         </div>
       </section>
 

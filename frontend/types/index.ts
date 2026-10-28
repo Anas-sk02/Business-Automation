@@ -17,10 +17,38 @@ export type PipelineStage =
   | "contacted"
   | "followup_due"
   | "replied"
-  | "meeting_booked"
+  | "interested"
+  | "meeting_scheduled"
+  | "proposal_sent"
+  | "negotiation"
   | "won"
-  | "lost"
+  | "closed_lost"
+  | "not_interested"
+  | "no_response"
   | "opted_out";
+
+export interface StartDiscoveryResponse {
+  campaign_id: string;
+  status: CampaignStatus;
+  queries_total: number;
+  target_leads: number;
+  estimated_duration_seconds: number;
+  message?: string | null;
+}
+
+export interface DiscoveryStatus {
+  campaign_id: string;
+  status: CampaignStatus;
+  discovery_queries_total: number;
+  discovery_queries_completed: number;
+  total_leads_found: number;
+  target_leads: number;
+  spent_amount: number;
+  max_budget: number;
+  is_near_budget: boolean;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
 
 export interface WhatsAppSettings {
   auto_send_after_approval: boolean;
