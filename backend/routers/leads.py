@@ -129,7 +129,7 @@ async def get_lead_detail(
             supabase.table("ai_analyses")
             .select("*")
             .eq("lead_id", lead_id)
-            .order("created_at", desc=True)
+            .order("analyzed_at", desc=True)
             .limit(1)
             .execute()
         )
