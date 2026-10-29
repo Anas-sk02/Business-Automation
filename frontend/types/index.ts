@@ -198,3 +198,105 @@ export interface ApiError {
   detail: string;
   error_code?: string;
 }
+
+// Stage 3 Audit & Evidence Types
+export type AuditStatus =
+  | "pending"
+  | "running"
+  | "completed"
+  | "failed"
+  | "timeout";
+
+export type EvidenceType =
+  | "audit_check"
+  | "screenshot"
+  | "lighthouse_report"
+  | "link_check"
+  | "content_scan"
+  | "industry_check";
+
+export type SeverityLevel = "critical" | "high" | "medium" | "low" | "info";
+
+export type VerificationStatus = "verified" | "unverified" | "contradicted";
+
+export interface EvidenceItem {
+  id: string;
+  lead_id: string;
+  audit_id?: string | null;
+  finding_title: string;
+  description: string;
+  evidence_type: EvidenceType;
+  evidence_data?: Record<string, unknown>;
+  severity: SeverityLevel;
+  verification_status: VerificationStatus;
+  detected_at: string;
+}
+
+export interface WebsiteAudit {
+  id: string;
+  lead_id: string;
+  tested_url: string;
+  dns_resolves?: boolean | null;
+  http_status_code?: number | null;
+  ssl_valid?: boolean | null;
+  page_loads: boolean;
+  load_time_seconds?: number | null;
+  final_url?: string | null;
+  mobile_overflow?: boolean | null;
+  mobile_overflow_pixels?: number;
+  has_contact_form?: boolean;
+  has_phone_on_site?: boolean;
+  has_email_on_site?: boolean;
+  has_whatsapp_link?: boolean;
+  has_social_links?: boolean;
+  social_links?: Array<Record<string, unknown>>;
+  page_title?: string | null;
+  meta_description?: string | null;
+  h1_headings?: string[];
+  has_alt_texts?: boolean | null;
+  missing_alt_count?: number;
+  total_internal_links?: number;
+  broken_links?: Array<Record<string, unknown>>;
+  broken_link_count?: number;
+  lighthouse_performance?: number | null;
+  lighthouse_seo?: number | null;
+  lighthouse_accessibility?: number | null;
+  lighthouse_best_practices?: number | null;
+  screenshot_desktop_url?: string | null;
+  screenshot_mobile_url?: string | null;
+  industry_checks?: Record<string, unknown>;
+  status: AuditStatus;
+  error_message?: string | null;
+  created_at: string;
+  started_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface StartAuditResponse {
+  audit_id?: string | null;
+  lead_id: string;
+  status: string;
+  message: string;
+}
+
+export interface FullAuditReport {
+  audit?: WebsiteAudit | null;
+  evidence: EvidenceItem[];
+  signed_screenshot_desktop_url?: string | null;
+  signed_screenshot_mobile_url?: string | null;
+}
+
+export interface BatchAuditResponse {
+  campaign_id: string;
+  total_eligible_leads: number;
+  audits_enqueued: number;
+  status: string;
+  message: string;
+}
+
+export interface LeadDetail extends Lead {
+  audit?: WebsiteAudit | null;
+  analysis?: Record<string, unknown> | null;
+  evidence?: EvidenceItem[];
+}
+
