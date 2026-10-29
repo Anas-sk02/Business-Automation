@@ -6,8 +6,10 @@ Adheres strictly to docs/decisions.md Sections 5, 8, 9, 11 and docs/implementati
 import asyncio
 from datetime import datetime, timezone
 import ipaddress
+import json
 import logging
 import re
+import shutil
 import socket
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -895,6 +897,211 @@ class AuditService:
 
         return created_items
 
+    async def run_lighthouse(
+        self,
+        url: str,
+        timeout_seconds: float = 25.0,
+    ) -> Dict[str, Optional[int]]:
+        """Execute Lighthouse audit as an asynchronous Node CLI subprocess with graceful fallback.
+
+        Per decisions.md Section 9:
+        - Lighthouse runs as a Node CLI subprocess with a timeout.
+        - If it fails, store the audit without Lighthouse scores (partial results are fine).
+        - Audit execution never crashes when Lighthouse is unavailable or times out.
+
+        Args:
+            url: Target URL to audit.
+            timeout_seconds: Subprocess timeout duration (default: 25.0s).
+
+        Returns:
+            Dict containing integer scores (0-100) or None for:
+                'lighthouse_performance', 'lighthouse_seo',
+                'lighthouse_accessibility', 'lighthouse_best_practices'.
+        """
+        default_scores: Dict[str, Optional[int]] = {
+            "lighthouse_performance": None,
+            "lighthouse_seo": None,
+            "lighthouse_accessibility": None,
+            "lighthouse_best_practices": None,
+        }
+
+        # 1. Input scheme and SSRF pre-check before executing external browser probe
+        if not url or not isinstance(url, str) or not url.strip().startswith(("http://", "https://")):
+            logger.warning(f"Lighthouse runner aborted: invalid HTTP scheme for '{url}'")
+            return default_scores
+
+        clean_url = url.strip()
+        hostname = self.extract_hostname(clean_url)
+        if not hostname:
+            return default_scores
+
+        resolves, dns_err = await self.check_dns(hostname)
+        if not resolves:
+            logger.warning(f"Lighthouse runner aborted for '{clean_url}' due to SSRF/DNS block: {dns_err}")
+            return default_scores
+
+        # 2. Locate lighthouse executable on PATH
+        lighthouse_bin = shutil.which("lighthouse") or shutil.which("lighthouse.cmd")
+        if not lighthouse_bin:
+            logger.info("Lighthouse CLI not found on PATH. Proceeding with partial audit results per decisions.md §9.")
+            return default_scores
+
+        cmd = [
+            lighthouse_bin,
+            clean_url,
+            "--output=json",
+            "--output-path=stdout",
+            "--chrome-flags=--headless --no-sandbox --disable-gpu --disable-dev-shm-usage",
+            "--only-categories=performance,seo,accessibility,best-practices",
+            "--quiet",
+        ]
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=timeout_seconds,
+                )
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except (ProcessLookupError, Exception):
+                    pass
+                logger.warning(
+                    f"Lighthouse execution timed out after {timeout_seconds}s for '{clean_url}'. Continuing with partial audit."
+                )
+                return default_scores
+
+            if proc.returncode != 0:
+                err_preview = stderr_bytes.decode(errors="ignore")[:300]
+                logger.warning(f"Lighthouse exited with code {proc.returncode} for '{clean_url}': {err_preview}")
+                return default_scores
+
+            data = json.loads(stdout_bytes.decode(errors="ignore"))
+            categories = data.get("categories", {})
+
+            def _parse_category_score(cat_key: str) -> Optional[int]:
+                cat = categories.get(cat_key)
+                if isinstance(cat, dict) and cat.get("score") is not None:
+                    try:
+                        raw_int = int(round(float(cat["score"]) * 100))
+                        return max(0, min(100, raw_int))
+                    except (ValueError, TypeError):
+                        return None
+                return None
+
+            return {
+                "lighthouse_performance": _parse_category_score("performance"),
+                "lighthouse_seo": _parse_category_score("seo"),
+                "lighthouse_accessibility": _parse_category_score("accessibility"),
+                "lighthouse_best_practices": _parse_category_score("best-practices"),
+            }
+
+        except Exception as e:
+            logger.warning(f"Lighthouse execution failed for '{url}': {e}. Continuing with partial audit.")
+            return default_scores
+
+    def generate_lighthouse_evidence(
+        self,
+        lead_id: str,
+        audit_id: Optional[str],
+        tested_url: str,
+        scores: Optional[Dict[str, Optional[int]]],
+    ) -> List[Dict[str, Any]]:
+        """Generate verified evidence items for Lighthouse scores per decisions.md Section 7.
+
+        Deterministic Lighthouse reports explicitly write verification_status = 'verified'.
+        """
+        created = []
+        safe_scores = scores or {}
+        perf = safe_scores.get("lighthouse_performance")
+        if perf is not None:
+            if perf < 50:
+                severity = "high"
+                title = f"Poor Lighthouse performance score ({perf}/100)"
+                desc = (
+                    f"Website achieved a low performance score of {perf}/100 in Lighthouse audit, "
+                    "indicating severe page speed and rendering bottlenecks on mobile."
+                )
+            elif perf < 90:
+                severity = "medium"
+                title = f"Moderate Lighthouse performance score ({perf}/100)"
+                desc = f"Website achieved a performance score of {perf}/100 in Lighthouse audit."
+            else:
+                severity = "info"
+                title = f"Good Lighthouse performance score ({perf}/100)"
+                desc = f"Website achieved an optimal performance score of {perf}/100 in Lighthouse audit."
+
+            item = self.create_evidence_item(
+                lead_id=lead_id,
+                audit_id=audit_id,
+                finding_title=title,
+                description=desc,
+                evidence_type="lighthouse_report",
+                severity=severity,
+                verification_status="verified",
+                evidence_data={"category": "performance", "score": perf},
+                tested_url=tested_url,
+            )
+            if item:
+                created.append(item)
+
+        seo = safe_scores.get("lighthouse_seo")
+        if seo is not None:
+            if seo < 80:
+                severity = "medium"
+                title = f"Suboptimal Lighthouse SEO score ({seo}/100)"
+                desc = (
+                    f"Website scored {seo}/100 in Lighthouse SEO audit, indicating missing "
+                    "meta tags, link crawlability issues, or unoptimized search signals."
+                )
+            else:
+                severity = "info"
+                title = f"Good Lighthouse SEO score ({seo}/100)"
+                desc = f"Website scored {seo}/100 in Lighthouse SEO audit."
+
+            item = self.create_evidence_item(
+                lead_id=lead_id,
+                audit_id=audit_id,
+                finding_title=title,
+                description=desc,
+                evidence_type="lighthouse_report",
+                severity=severity,
+                verification_status="verified",
+                evidence_data={"category": "seo", "score": seo},
+                tested_url=tested_url,
+            )
+            if item:
+                created.append(item)
+
+        a11y = safe_scores.get("lighthouse_accessibility")
+        if a11y is not None and a11y < 70:
+            item = self.create_evidence_item(
+                lead_id=lead_id,
+                audit_id=audit_id,
+                finding_title=f"Accessibility issues detected ({a11y}/100)",
+                description=(
+                    f"Website scored {a11y}/100 in Lighthouse accessibility audit, "
+                    "indicating color contrast, labeling, or structural issues."
+                ),
+                evidence_type="lighthouse_report",
+                severity="low",
+                verification_status="verified",
+                evidence_data={"category": "accessibility", "score": a11y},
+                tested_url=tested_url,
+            )
+            if item:
+                created.append(item)
+
+        return created
+
     async def audit_lead_website(
         self,
         lead_id: str,
@@ -1177,7 +1384,17 @@ class AuditService:
         # 5. Check broken internal links
         link_audit = await self.check_broken_links(raw_hrefs, target_url, client=http_client)
 
-        # 6. Generate verified evidence items for all content & DOM findings
+        # 6. Execute Lighthouse audit with graceful fallback (decisions.md Section 9)
+        lighthouse_scores: Dict[str, Optional[int]] = {
+            "lighthouse_performance": None,
+            "lighthouse_seo": None,
+            "lighthouse_accessibility": None,
+            "lighthouse_best_practices": None,
+        }
+        if probe.get("page_loads"):
+            lighthouse_scores = await self.run_lighthouse(target_url)
+
+        # 7. Generate verified evidence items for all content, DOM, and Lighthouse findings
         if probe.get("page_loads"):
             self.generate_content_evidence(
                 lead_id=lead_id,
@@ -1186,6 +1403,12 @@ class AuditService:
                 screenshots_data=screenshots,
                 contact_info=contact_info,
                 link_audit=link_audit,
+            )
+            self.generate_lighthouse_evidence(
+                lead_id=lead_id,
+                audit_id=audit_id,
+                tested_url=target_url,
+                scores=lighthouse_scores,
             )
 
         if audit_id:
@@ -1215,6 +1438,10 @@ class AuditService:
                     "total_internal_links": link_audit.get("total_internal_links", 0),
                     "broken_links": link_audit.get("broken_links", []),
                     "broken_link_count": link_audit.get("broken_link_count", 0),
+                    "lighthouse_performance": lighthouse_scores.get("lighthouse_performance"),
+                    "lighthouse_seo": lighthouse_scores.get("lighthouse_seo"),
+                    "lighthouse_accessibility": lighthouse_scores.get("lighthouse_accessibility"),
+                    "lighthouse_best_practices": lighthouse_scores.get("lighthouse_best_practices"),
                     "status": status,
                     "error_message": probe.get("error_message"),
                     "completed_at": complete_iso,
@@ -1249,6 +1476,10 @@ class AuditService:
             "total_internal_links": link_audit.get("total_internal_links", 0),
             "broken_links": link_audit.get("broken_links", []),
             "broken_link_count": link_audit.get("broken_link_count", 0),
+            "lighthouse_performance": lighthouse_scores.get("lighthouse_performance"),
+            "lighthouse_seo": lighthouse_scores.get("lighthouse_seo"),
+            "lighthouse_accessibility": lighthouse_scores.get("lighthouse_accessibility"),
+            "lighthouse_best_practices": lighthouse_scores.get("lighthouse_best_practices"),
         }
 
 
