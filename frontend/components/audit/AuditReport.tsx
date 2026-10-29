@@ -13,7 +13,6 @@ import {
   CheckCircle2,
   XCircle,
   ExternalLink,
-  ShieldAlert,
 } from "lucide-react";
 
 export interface AuditReportProps {
@@ -25,6 +24,23 @@ export interface AuditReportProps {
   isAuditing?: boolean;
   onStartAudit?: () => void;
   className?: string;
+}
+
+export function sanitizeUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+    const candidate = hasScheme ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function AuditReport({
@@ -136,6 +152,7 @@ export function AuditReport({
     desktopScreenshotUrl || audit.screenshot_desktop_url;
   const effectiveMobileUrl =
     mobileScreenshotUrl || audit.screenshot_mobile_url;
+  const safeTestedUrl = sanitizeUrl(audit.tested_url);
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -149,14 +166,18 @@ export function AuditReport({
             </h3>
             <p className="text-xs text-muted-foreground">
               Tested URL:{" "}
-              <a
-                href={audit.tested_url}
-                target="_blank"
-                rel="noreferrer noopener"
-                className="font-mono text-primary hover:underline inline-flex items-center gap-1"
-              >
-                {audit.tested_url} <ExternalLink className="size-3" />
-              </a>
+              {safeTestedUrl ? (
+                <a
+                  href={safeTestedUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="font-mono text-primary hover:underline inline-flex items-center gap-1"
+                >
+                  {audit.tested_url} <ExternalLink className="size-3" />
+                </a>
+              ) : (
+                <span className="font-mono text-foreground">{audit.tested_url}</span>
+              )}
             </p>
           </div>
           <span className="text-xs px-2.5 py-1 rounded-md font-medium uppercase tracking-wide bg-good/10 text-good border border-good/30">
@@ -250,4 +271,3 @@ export function AuditReport({
     </div>
   );
 }
-

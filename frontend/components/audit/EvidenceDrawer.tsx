@@ -14,7 +14,6 @@ import {
   AlertTriangle,
   XCircle,
   ExternalLink,
-  ShieldAlert,
 } from "lucide-react";
 
 export interface EvidenceDrawerProps {
@@ -23,6 +22,23 @@ export interface EvidenceDrawerProps {
   onOpenChange: (open: boolean) => void;
   testedUrl?: string | null;
   screenshotUrl?: string | null;
+}
+
+export function sanitizeUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+    const candidate = hasScheme ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 export function getVerificationBadge(status: VerificationStatus): {
@@ -124,17 +140,21 @@ export function EvidenceDrawer({
   const severityStyle = getSeverityStyle(evidence.severity);
   const StatusIcon = verification.icon;
 
-  const formattedDate = evidence.detected_at
-    ? new Date(evidence.detected_at).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "Timestamp not available";
+  const dateObj = evidence.detected_at ? new Date(evidence.detected_at) : null;
+  const formattedDate =
+    dateObj && !Number.isNaN(dateObj.getTime())
+      ? dateObj.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "Timestamp not available";
 
   const impactNote = getPossibleImpact(evidence.finding_title, evidence.description);
+  const safeTestedUrl = sanitizeUrl(testedUrl);
+  const safeScreenshotUrl = sanitizeUrl(screenshotUrl);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -196,7 +216,11 @@ export function EvidenceDrawer({
                 <div key={key} className="flex justify-between gap-4 border-b border-border/40 pb-1.5 last:border-0 last:pb-0">
                   <span className="text-muted-foreground break-all">{key}</span>
                   <span className="font-semibold text-foreground tabular-nums text-right break-all">
-                    {typeof val === "object" ? JSON.stringify(val) : String(val)}
+                    {val === null
+                      ? "null"
+                      : typeof val === "object"
+                      ? JSON.stringify(val)
+                      : String(val)}
                   </span>
                 </div>
               ))}
@@ -210,10 +234,10 @@ export function EvidenceDrawer({
             Target URL
           </span>
           <div className="flex items-center gap-2 break-all text-foreground font-mono bg-muted/30 p-2.5 rounded border border-border">
-            <span>{testedUrl || "Not specified"}</span>
-            {testedUrl && (
+            <span>{safeTestedUrl || testedUrl || "Not specified"}</span>
+            {safeTestedUrl && (
               <a
-                href={testedUrl}
+                href={safeTestedUrl}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="text-primary hover:underline shrink-0"
@@ -225,14 +249,14 @@ export function EvidenceDrawer({
         </div>
 
         {/* Screenshot Context if Available */}
-        {screenshotUrl && (
+        {safeScreenshotUrl && (
           <div className="space-y-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Visual context
             </h4>
             <div className="rounded border border-border bg-card overflow-hidden">
               <img
-                src={screenshotUrl}
+                src={safeScreenshotUrl}
                 alt={`Screenshot for ${evidence.finding_title}`}
                 className="w-full h-auto object-cover max-h-64 object-top"
                 loading="lazy"
@@ -244,4 +268,3 @@ export function EvidenceDrawer({
     </Sheet>
   );
 }
-

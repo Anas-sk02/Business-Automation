@@ -18,6 +18,23 @@ export interface ScreenshotViewerProps {
   className?: string;
 }
 
+export function sanitizeUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+    const candidate = hasScheme ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 export function ScreenshotViewer({
   desktopUrl,
   mobileUrl,
@@ -31,17 +48,21 @@ export function ScreenshotViewer({
     width: string;
   } | null>(null);
 
-  const hasAnyScreenshot = Boolean(desktopUrl || mobileUrl);
+  const safeDesktopUrl = sanitizeUrl(desktopUrl);
+  const safeMobileUrl = sanitizeUrl(mobileUrl);
+  const hasAnyScreenshot = Boolean(safeDesktopUrl || safeMobileUrl);
 
-  const formattedDate = capturedAt
-    ? new Date(capturedAt).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : "Not recorded";
+  const dateObj = capturedAt ? new Date(capturedAt) : null;
+  const formattedDate =
+    dateObj && !Number.isNaN(dateObj.getTime())
+      ? dateObj.toLocaleString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : "Not recorded";
 
   if (!hasAnyScreenshot) {
     return (
@@ -71,12 +92,12 @@ export function ScreenshotViewer({
             <span className="font-medium text-foreground">Desktop view</span>
             <span className="text-muted-foreground text-[11px]">1280 px wide</span>
           </div>
-          {desktopUrl ? (
+          {safeDesktopUrl ? (
             <button
               type="button"
               onClick={() =>
                 setEnlarged({
-                  url: desktopUrl,
+                  url: safeDesktopUrl,
                   label: "Desktop view",
                   width: "1280 px",
                 })
@@ -84,7 +105,7 @@ export function ScreenshotViewer({
               className="group relative block w-full aspect-video bg-muted/20 overflow-hidden text-left cursor-zoom-in"
             >
               <img
-                src={desktopUrl}
+                src={safeDesktopUrl}
                 alt="Desktop website screenshot"
                 className="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-[1.02]"
                 loading="lazy"
@@ -108,12 +129,12 @@ export function ScreenshotViewer({
             <span className="font-medium text-foreground">Mobile view</span>
             <span className="text-muted-foreground text-[11px]">375 px wide</span>
           </div>
-          {mobileUrl ? (
+          {safeMobileUrl ? (
             <button
               type="button"
               onClick={() =>
                 setEnlarged({
-                  url: mobileUrl,
+                  url: safeMobileUrl,
                   label: "Mobile view",
                   width: "375 px",
                 })
@@ -121,7 +142,7 @@ export function ScreenshotViewer({
               className="group relative block w-full aspect-video bg-muted/20 overflow-hidden text-left cursor-zoom-in"
             >
               <img
-                src={mobileUrl}
+                src={safeMobileUrl}
                 alt="Mobile website screenshot"
                 className="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-[1.02]"
                 loading="lazy"
@@ -166,4 +187,3 @@ export function ScreenshotViewer({
     </div>
   );
 }
-

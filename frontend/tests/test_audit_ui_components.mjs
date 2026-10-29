@@ -98,6 +98,30 @@ function getPossibleImpact(title, description) {
   return "This issue may affect site usability or search ranking depending on visitor intent.";
 }
 
+function sanitizeUrl(rawUrl) {
+  if (!rawUrl) return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+  try {
+    const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed);
+    const candidate = hasScheme ? trimmed : `https://${trimmed}`;
+    const parsed = new URL(candidate);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function formatSafeDate(dateStr, fallback = "Not recorded") {
+  const dateObj = dateStr ? new Date(dateStr) : null;
+  return dateObj && !Number.isNaN(dateObj.getTime())
+    ? dateObj.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : fallback;
+}
+
 describe("Audit UI & Evidence Presentation Component Tests", () => {
   it("evaluates Lighthouse score thresholds per UI-UX.md §6.6 (<50 problem, 50-89 caution, >=90 good)", () => {
     // Under 50 -> problem
@@ -199,5 +223,23 @@ describe("Audit UI & Evidence Presentation Component Tests", () => {
       "Website audit overview"
     );
   });
-});
 
+  it("safely sanitizes screenshot URLs and external links against malicious schemes", () => {
+    assert.strictEqual(
+      sanitizeUrl("https://supabase.co/storage/v1/object/sign/screenshots/demo.png"),
+      "https://supabase.co/storage/v1/object/sign/screenshots/demo.png"
+    );
+    assert.strictEqual(sanitizeUrl("http://localhost:8000/test.png"), "http://localhost:8000/test.png");
+    assert.strictEqual(sanitizeUrl("javascript:alert(1)"), null);
+    assert.strictEqual(sanitizeUrl("data:image/svg+xml;base64,PHN2Z..."), null);
+    assert.strictEqual(sanitizeUrl("file:///C:/Windows/system.ini"), null);
+  });
+
+  it("safely formats dates and avoids 'Invalid Date' errors on corrupted timestamps", () => {
+    assert.strictEqual(formatSafeDate("2026-10-12T14:30:00Z"), "Oct 12, 2026");
+    assert.strictEqual(formatSafeDate("not-a-valid-date"), "Not recorded");
+    assert.strictEqual(formatSafeDate(null), "Not recorded");
+    assert.strictEqual(formatSafeDate(undefined), "Not recorded");
+    assert.strictEqual(formatSafeDate("", "Timestamp not available"), "Timestamp not available");
+  });
+});
