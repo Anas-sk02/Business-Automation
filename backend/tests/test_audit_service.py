@@ -246,3 +246,72 @@ def test_create_evidence_item_database_error_handling():
         description="Test Desc",
     )
     assert res is None
+
+
+@pytest.mark.anyio
+async def test_audit_lead_full_success_with_screenshots():
+    """Verify end-to-end audit success on an active website with screenshots."""
+    mock_db = MagicMock()
+    lead_data = {
+        "id": "lead-success-1",
+        "website_url": "https://apexclinic.com",
+        "campaigns": {"user_id": "user-123"},
+    }
+
+    mock_leads_table = MagicMock()
+    mock_leads_table.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=[lead_data]
+    )
+    mock_leads_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    mock_audits_table = MagicMock()
+    mock_audits_table.insert.return_value.execute.return_value = MagicMock(data=[{"id": "audit-succ-1"}])
+    mock_audits_table.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[{}])
+
+    def mock_table(name):
+        if name == "leads":
+            return mock_leads_table
+        if name == "website_audits":
+            return mock_audits_table
+        return MagicMock()
+
+    mock_db.table.side_effect = mock_table
+
+    service = AuditService(db_client=mock_db)
+
+    fake_probe = {
+        "http_status_code": 200,
+        "ssl_valid": True,
+        "page_loads": True,
+        "load_time_seconds": 1.25,
+        "final_url": "https://apexclinic.com/",
+        "error_message": None,
+    }
+
+    fake_screenshots = {
+        "screenshot_desktop_url": "user-123/lead-success-1/uuid_desktop.png",
+        "screenshot_mobile_url": "user-123/lead-success-1/uuid_mobile.png",
+    }
+
+    with patch.object(service, "check_dns", return_value=(True, None)):
+        with patch.object(service, "check_http_and_ssl", return_value=fake_probe):
+            with patch.object(service, "capture_screenshots", return_value=fake_screenshots):
+                result = await service.audit_lead_website(
+                    lead_id="lead-success-1",
+                    user_id="user-123",
+                )
+
+    assert result["status"] == "completed"
+    assert result["error_message"] is None
+
+    # Check lead reached 'researched' stage
+    lead_update_calls = mock_leads_table.update.call_args_list
+    assert lead_update_calls[-1][0][0]["pipeline_stage"] == "researched"
+
+    # Check audit record was updated with screenshot URLs
+    audit_update_calls = mock_audits_table.update.call_args_list
+    latest_audit_update = audit_update_calls[-1][0][0]
+    assert latest_audit_update["status"] == "completed"
+    assert latest_audit_update["screenshot_desktop_url"] == "user-123/lead-success-1/uuid_desktop.png"
+    assert latest_audit_update["screenshot_mobile_url"] == "user-123/lead-success-1/uuid_mobile.png"
+

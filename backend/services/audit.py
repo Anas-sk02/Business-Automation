@@ -10,6 +10,7 @@ import logging
 import socket
 import time
 from typing import Any, Dict, List, Optional, Tuple
+import uuid
 from urllib.parse import urlparse
 
 import httpx
@@ -26,6 +27,11 @@ PER_SITE_TIMEOUT_SECONDS = 60.0
 
 # HTTP probe timeout
 PROBE_HTTP_TIMEOUT_SECONDS = 15.0
+
+# Screenshot Viewport Constants per docs/prd.md F4.2 & F4.3
+DESKTOP_VIEWPORT = {"width": 1920, "height": 1080}
+MOBILE_VIEWPORT = {"width": 375, "height": 812}
+SCREENSHOTS_BUCKET = "screenshots"
 
 
 class AuditService:
@@ -287,6 +293,195 @@ class AuditService:
             logger.error(f"Failed to insert evidence item for lead {lead_id}: {e}")
             return None
 
+    def upload_screenshot(self, object_path: str, data: bytes) -> bool:
+        """Upload raw PNG image bytes to private Supabase screenshots bucket.
+
+        Args:
+            object_path: Path inside bucket, e.g. {user_id}/{lead_id}/{uuid}.png.
+            data: Raw PNG file bytes.
+
+        Returns:
+            True if upload succeeded, False otherwise.
+        """
+        try:
+            res = self._db.storage.from_(SCREENSHOTS_BUCKET).upload(
+                path=object_path,
+                file=data,
+                file_options={"content-type": "image/png", "upsert": "true"},
+            )
+            return bool(res)
+        except Exception as e:
+            logger.error(f"Failed to upload screenshot to '{object_path}': {e}")
+            return False
+
+    def get_signed_screenshot_url(
+        self, object_path: Optional[str], expires_in: int = 3600
+    ) -> Optional[str]:
+        """Generate a time-limited signed URL for private screenshot object.
+
+        Per decisions.md Section 8, screenshots bucket is private and API
+        responses return signed URLs expiring after 1 hour (3600s).
+
+        Args:
+            object_path: Path in storage bucket (e.g. {user_id}/{lead_id}/{uuid}.png).
+            expires_in: Expiry duration in seconds (default: 3600).
+
+        Returns:
+            Signed URL string or None if generation failed.
+        """
+        if not object_path:
+            return None
+
+        try:
+            res = self._db.storage.from_(SCREENSHOTS_BUCKET).create_signed_url(
+                path=object_path,
+                expires_in=expires_in,
+            )
+            if isinstance(res, dict):
+                return res.get("signedURL") or res.get("signedUrl")
+            return getattr(res, "signed_url", None) or str(res)
+        except Exception as e:
+            logger.warning(f"Failed to create signed URL for '{object_path}': {e}")
+            return None
+
+    async def capture_screenshots(
+        self,
+        url: str,
+        lead_id: str,
+        user_id: str,
+        audit_id: Optional[str] = None,
+        timeout_ms: int = 25000,
+    ) -> Dict[str, Optional[str]]:
+        """Capture desktop and mobile screenshots using headless Playwright.
+
+        Per decisions.md Section 8:
+        - Viewports: Desktop 1920x1080, Mobile 375x812 (iPhone-like)
+        - Files stored in private Supabase 'screenshots' bucket
+        - Object paths formatted as: {user_id}/{lead_id}/{uuid}_{viewport}.png
+        - File names use UUIDs only, never business names
+
+        Args:
+            url: Target website URL.
+            lead_id: Target lead UUID.
+            user_id: Owning user UUID for multi-tenant isolation.
+            audit_id: Associated website_audit UUID.
+            timeout_ms: Maximum wait duration in milliseconds for rendering.
+
+        Returns:
+            Dict containing 'screenshot_desktop_url' and 'screenshot_mobile_url' storage paths.
+        """
+        from playwright.async_api import async_playwright
+
+        results: Dict[str, Optional[str]] = {
+            "screenshot_desktop_url": None,
+            "screenshot_mobile_url": None,
+        }
+
+        # SSRF re-verification: ensure target render URL does not point to internal/prohibited IP
+        render_host = self.extract_hostname(url)
+        if not render_host:
+            logger.warning(f"Aborting screenshot: invalid target hostname for '{url}'")
+            return results
+
+        resolves, dns_err = await self.check_dns(render_host)
+        if not resolves:
+            logger.warning(f"Aborting screenshot for '{url}' due to DNS/SSRF block: {dns_err}")
+            return results
+
+        # Sanitize folder identifiers to prevent path traversal
+        clean_user_id = str(user_id).replace("/", "").replace("\\", "").replace("..", "")
+        clean_lead_id = str(lead_id).replace("/", "").replace("\\", "").replace("..", "")
+
+        uuid_token = uuid.uuid4().hex
+        desktop_storage_path = f"{clean_user_id}/{clean_lead_id}/{uuid_token}_desktop.png"
+        mobile_storage_path = f"{clean_user_id}/{clean_lead_id}/{uuid_token}_mobile.png"
+
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    headless=True,
+                    args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                )
+                try:
+                    # 1. Desktop Screenshot (1920x1080)
+                    try:
+                        desktop_page = await browser.new_page(
+                            viewport=DESKTOP_VIEWPORT,
+                            user_agent=(
+                                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                "Chrome/122.0.0.0 Safari/537.36 SignalForge/1.0"
+                            ),
+                        )
+                        await desktop_page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+                        desktop_bytes = await desktop_page.screenshot(type="png", full_page=False)
+                        await desktop_page.close()
+
+                        if self.upload_screenshot(desktop_storage_path, desktop_bytes):
+                            results["screenshot_desktop_url"] = desktop_storage_path
+                            self.create_evidence_item(
+                                lead_id=lead_id,
+                                audit_id=audit_id,
+                                finding_title="Desktop screenshot captured",
+                                description="Visual capture of desktop layout (1920x1080).",
+                                evidence_type="screenshot",
+                                severity="info",
+                                verification_status="verified",
+                                evidence_data={
+                                    "storage_path": desktop_storage_path,
+                                    "viewport": "desktop",
+                                    "width": DESKTOP_VIEWPORT["width"],
+                                    "height": DESKTOP_VIEWPORT["height"],
+                                },
+                            )
+                    except Exception as de:
+                        logger.warning(f"Desktop screenshot capture failed for '{url}': {de}")
+
+                    # 2. Mobile Screenshot (375x812)
+                    try:
+                        mobile_context = await browser.new_context(
+                            viewport=MOBILE_VIEWPORT,
+                            is_mobile=True,
+                            has_touch=True,
+                            user_agent=(
+                                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+                                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                                "Version/17.0 Mobile/15E148 Safari/604.1"
+                            ),
+                        )
+                        mobile_page = await mobile_context.new_page()
+                        await mobile_page.goto(url, timeout=timeout_ms, wait_until="domcontentloaded")
+                        mobile_bytes = await mobile_page.screenshot(type="png", full_page=False)
+                        await mobile_context.close()
+
+                        if self.upload_screenshot(mobile_storage_path, mobile_bytes):
+                            results["screenshot_mobile_url"] = mobile_storage_path
+                            self.create_evidence_item(
+                                lead_id=lead_id,
+                                audit_id=audit_id,
+                                finding_title="Mobile screenshot captured",
+                                description="Visual capture of mobile viewport layout (375x812).",
+                                evidence_type="screenshot",
+                                severity="info",
+                                verification_status="verified",
+                                evidence_data={
+                                    "storage_path": mobile_storage_path,
+                                    "viewport": "mobile",
+                                    "width": MOBILE_VIEWPORT["width"],
+                                    "height": MOBILE_VIEWPORT["height"],
+                                },
+                            )
+                    except Exception as me:
+                        logger.warning(f"Mobile screenshot capture failed for '{url}': {me}")
+
+                finally:
+                    await browser.close()
+
+        except Exception as e:
+            logger.error(f"Playwright screenshot orchestration failed for '{url}': {e}")
+
+        return results
+
     async def audit_lead_website(
         self,
         lead_id: str,
@@ -390,6 +585,7 @@ class AuditService:
                 return await self._run_probes(
                     audit_id=audit_id,
                     lead_id=lead_id,
+                    user_id=user_id,
                     url=normalized_url,
                     http_client=http_client,
                 )
@@ -463,10 +659,11 @@ class AuditService:
         self,
         audit_id: Optional[str],
         lead_id: str,
+        user_id: str,
         url: str,
         http_client: Optional[httpx.AsyncClient] = None,
     ) -> Dict[str, Any]:
-        """Execute DNS and HTTP probe sequence for a target URL."""
+        """Execute DNS, HTTP probe, and visual screenshot sequence for a target URL."""
         hostname = self.extract_hostname(url)
         dns_resolves, dns_error = await self.check_dns(hostname) if hostname else (False, "Missing hostname")
 
@@ -531,6 +728,20 @@ class AuditService:
                 evidence_data={"load_time_seconds": probe["load_time_seconds"]},
             )
 
+        # 3. Capture screenshots if page loads successfully
+        screenshots: Dict[str, Optional[str]] = {
+            "screenshot_desktop_url": None,
+            "screenshot_mobile_url": None,
+        }
+        if probe.get("page_loads"):
+            target_render_url = probe.get("final_url") or url
+            screenshots = await self.capture_screenshots(
+                url=target_render_url,
+                lead_id=lead_id,
+                user_id=user_id,
+                audit_id=audit_id,
+            )
+
         if audit_id:
             try:
                 self._db.table("website_audits").update({
@@ -540,6 +751,8 @@ class AuditService:
                     "page_loads": probe.get("page_loads", False),
                     "load_time_seconds": probe.get("load_time_seconds"),
                     "final_url": probe.get("final_url"),
+                    "screenshot_desktop_url": screenshots.get("screenshot_desktop_url"),
+                    "screenshot_mobile_url": screenshots.get("screenshot_mobile_url"),
                     "status": status,
                     "error_message": probe.get("error_message"),
                     "completed_at": complete_iso,
@@ -556,6 +769,8 @@ class AuditService:
             "page_loads": probe.get("page_loads", False),
             "load_time_seconds": probe.get("load_time_seconds"),
             "final_url": probe.get("final_url"),
+            "screenshot_desktop_url": screenshots.get("screenshot_desktop_url"),
+            "screenshot_mobile_url": screenshots.get("screenshot_mobile_url"),
         }
 
 
