@@ -95,3 +95,12 @@ class FullAuditReportResponse(BaseModel):
     signed_screenshot_desktop_url: Optional[str] = None
     signed_screenshot_mobile_url: Optional[str] = None
 
+
+class BatchAuditResponse(BaseModel):
+    """Response returned when initiating a batch audit job for a campaign."""
+
+    campaign_id: str
+    leads_queued: int
+    message: str
+
+

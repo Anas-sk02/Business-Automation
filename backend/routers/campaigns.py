@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 import logging
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from typing import Dict, Any, List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
 
 from backend.database import supabase
 from backend.dependencies import get_current_user, get_owned_campaign
@@ -14,8 +14,10 @@ from backend.models.discovery import (
     StartDiscoveryResponse,
     DiscoveryStatusResponse,
 )
+from backend.models.audit import BatchAuditResponse
 from backend.models.common import ResponseEnvelope, PaginatedEnvelope
 from backend.services.discovery import DiscoveryService, get_user_semaphore
+from backend.services.audit import AuditService
 
 logger = logging.getLogger("signalforge.campaigns")
 router = APIRouter()
@@ -404,4 +406,82 @@ async def get_discovery_status(
         data=status_data,
         message="Discovery status retrieved successfully",
     )
+
+
+@router.post(
+    "/{id}/start-audit",
+    response_model=ResponseEnvelope[BatchAuditResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_batch_campaign_audit(
+    background_tasks: BackgroundTasks,
+    campaign: Dict[str, Any] = Depends(get_owned_campaign),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> ResponseEnvelope[BatchAuditResponse]:
+    """Initiate batch website audits for all eligible leads in an owned campaign.
+
+    Per decisions.md Section 4 & 9:
+    - Path: POST /api/campaigns/{id}/start-audit (202 Accepted).
+    - Concurrency limited via AUDIT_SEMAPHORE.
+    - Transitions un-audited leads to 'research_pending' and executes audit jobs.
+    """
+    campaign_id = campaign["id"]
+    user_id = user["id"]
+
+    try:
+        # Find leads in campaign eligible for audit (capped at 100 per batch)
+        leads_res = (
+            supabase.table("leads")
+            .select("id, pipeline_stage")
+            .eq("campaign_id", campaign_id)
+            .in_("pipeline_stage", ["discovered", "research_pending"])
+            .limit(100)
+            .execute()
+        )
+        eligible_leads = leads_res.data or []
+        lead_ids = [l["id"] for l in eligible_leads]
+
+        if not lead_ids:
+            return ResponseEnvelope(
+                data=BatchAuditResponse(
+                    campaign_id=campaign_id,
+                    leads_queued=0,
+                    message="No eligible leads found for auditing",
+                ),
+                message="No leads to audit",
+            )
+
+        # Mark all selected leads as research_pending immediately
+        now_iso = datetime.now(timezone.utc).isoformat()
+        supabase.table("leads").update({
+            "pipeline_stage": "research_pending",
+            "updated_at": now_iso,
+        }).in_("id", lead_ids).execute()
+
+        audit_service = AuditService(db_client=supabase)
+
+        async def _run_batch(l_ids: List[str], u_id: str):
+            for lid in l_ids:
+                try:
+                    await audit_service.audit_lead_website(lid, u_id)
+                except Exception as e:
+                    logger.warning(f"Batch audit failed for lead {lid}: {e}")
+
+        background_tasks.add_task(_run_batch, lead_ids, user_id)
+
+        return ResponseEnvelope(
+            data=BatchAuditResponse(
+                campaign_id=campaign_id,
+                leads_queued=len(lead_ids),
+                message=f"Queued audits for {len(lead_ids)} lead(s) in background",
+            ),
+            message="Batch audit initiated successfully",
+        )
+    except Exception as exc:
+        logger.error(f"Error starting batch audit for campaign {campaign_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initiate batch audit for campaign",
+        ) from exc
+
 

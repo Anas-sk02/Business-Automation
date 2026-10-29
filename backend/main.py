@@ -43,6 +43,44 @@ async def recover_stale_discovery_jobs() -> int:
         return 0
 
 
+async def recover_stale_audit_jobs() -> int:
+    """Reset website_audits stuck in running for > 15 minutes per docs/decisions.md Section 9."""
+    try:
+        db = get_supabase_client()
+        fifteen_mins_ago = (datetime.now(timezone.utc) - timedelta(minutes=15)).isoformat()
+
+        stale_res = (
+            db.table("website_audits")
+            .select("id, lead_id")
+            .eq("status", "running")
+            .lt("created_at", fifteen_mins_ago)
+            .execute()
+        )
+        if stale_res.data:
+            stale_ids = [r["id"] for r in stale_res.data]
+            lead_ids = [r["lead_id"] for r in stale_res.data if r.get("lead_id")]
+            now_iso = datetime.now(timezone.utc).isoformat()
+
+            db.table("website_audits").update({
+                "status": "failed",
+                "error_message": "Audit timed out (stale job recovered on startup)",
+                "completed_at": now_iso,
+            }).in_("id", stale_ids).execute()
+
+            if lead_ids:
+                db.table("leads").update({
+                    "pipeline_stage": "researched",
+                    "updated_at": now_iso,
+                }).in_("id", lead_ids).eq("pipeline_stage", "research_pending").execute()
+
+            logger.warning(f"Startup recovery: reset {len(stale_ids)} stale running audit(s) to failed: {stale_ids}")
+            return len(stale_ids)
+        return 0
+    except Exception as exc:
+        logger.error(f"Error during startup audit job recovery: {exc}", exc_info=True)
+        return 0
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Lifespan handler for server startup and shutdown."""
@@ -52,6 +90,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Run background recovery on startup (docs/decisions.md Section 9)
     await recover_stale_discovery_jobs()
+    await recover_stale_audit_jobs()
 
     yield
     logger.info("SignalForge AI backend shutting down...")
