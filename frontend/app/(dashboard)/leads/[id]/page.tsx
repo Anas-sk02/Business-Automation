@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, Suspense } from "react";
+import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api";
@@ -9,9 +9,12 @@ import type {
   ResponseEnvelope,
   StartAuditResponse,
   FullAuditReport,
+  AIAnalysis as AIAnalysisType,
+  StartAnalysisResponse,
 } from "@/types";
 import { ScoreLedger } from "@/components/lead/ScoreLedger";
 import { AuditReport } from "@/components/audit/AuditReport";
+import { AIAnalysis } from "@/components/analysis/AIAnalysis";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -330,6 +333,27 @@ function LeadDetailContent({
   const [auditMessage, setAuditMessage] = useState<string | null>(null);
   const [auditError, setAuditError] = useState<string | null>(null);
 
+  // AI Analysis state
+  const [analysis, setAnalysis] = useState<AIAnalysisType | null>(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
+  const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+
+  const fetchAnalysis = async () => {
+    try {
+      setIsLoadingAnalysis(true);
+      setAnalysisError(null);
+      const res = await api.get<ResponseEnvelope<AIAnalysisType | null>>(
+        `/api/leads/${leadId}/analysis`
+      );
+      setAnalysis(res.data);
+    } catch {
+      setAnalysis(null);
+    } finally {
+      setIsLoadingAnalysis(false);
+    }
+  };
+
   const fetchLead = async () => {
     try {
       setIsLoading(true);
@@ -346,6 +370,9 @@ function LeadDetailContent({
       } catch {
         setAuditReport(null);
       }
+
+      // Load AI analysis
+      await fetchAnalysis();
     } catch (err: unknown) {
       if (err instanceof ApiClientError) {
         setLoadError(err.message);
@@ -368,7 +395,7 @@ function LeadDetailContent({
       setAuditMessage(null);
 
       const res = await api.post<ResponseEnvelope<StartAuditResponse>>(
-        `/api/leads/${leadId}/audit`
+        `/api/leads/${leadId}/start-audit`
       );
       setAuditMessage(res.data.message || "Audit initiated successfully.");
       // Refresh lead details to pick up newly created audit record
@@ -381,6 +408,50 @@ function LeadDetailContent({
       }
     } finally {
       setIsAuditing(false);
+    }
+  };
+
+  const handleStartAnalysis = async () => {
+    try {
+      setIsRunningAnalysis(true);
+      setAnalysisError(null);
+      await api.post<ResponseEnvelope<StartAnalysisResponse>>(
+        `/api/leads/${leadId}/analyze`
+      );
+
+      // Poll every 2 seconds for analysis completion (up to 10 attempts)
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts += 1;
+        try {
+          const res = await api.get<ResponseEnvelope<AIAnalysisType | null>>(
+            `/api/leads/${leadId}/analysis`
+          );
+          if (res.data) {
+            setAnalysis(res.data);
+            clearInterval(interval);
+            setIsRunningAnalysis(false);
+            // Re-fetch lead so that fit_score, score_breakdown, and pipeline_stage update live
+            const leadRes = await api.get<ResponseEnvelope<LeadDetail>>(`/api/leads/${leadId}`);
+            setLead(leadRes.data);
+          } else if (attempts >= 10) {
+            clearInterval(interval);
+            setIsRunningAnalysis(false);
+          }
+        } catch {
+          if (attempts >= 10) {
+            clearInterval(interval);
+            setIsRunningAnalysis(false);
+          }
+        }
+      }, 2000);
+    } catch (err: unknown) {
+      setIsRunningAnalysis(false);
+      if (err instanceof ApiClientError) {
+        setAnalysisError(err.message);
+      } else {
+        setAnalysisError("Failed to trigger AI analysis.");
+      }
     }
   };
 
@@ -629,18 +700,19 @@ function LeadDetailContent({
 
             {/* Tab: Analysis */}
             {activeTab === "analysis" && (
-              <div className="rounded-lg border border-border bg-card p-6 text-center">
-                <Sparkles className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-2 text-sm font-medium text-foreground">
-                  AI analysis workspace
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                  AI analysis generates tailor-made pitch angles, objection handlers, and value
-                  hypotheses for this business.
-                </p>
-                <Button variant="outline" size="sm" className="mt-4" disabled>
-                  Analysis available in Stage 4
-                </Button>
+              <div className="space-y-4">
+                {analysisError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-problem/30 bg-problem/10 p-3 text-xs text-problem">
+                    <AlertCircle className="size-4 shrink-0" />
+                    <span>{analysisError}</span>
+                  </div>
+                )}
+                <AIAnalysis
+                  analysis={analysis}
+                  isLoading={isLoadingAnalysis}
+                  isRunning={isRunningAnalysis}
+                  onRunAnalysis={handleStartAnalysis}
+                />
               </div>
             )}
 
@@ -696,9 +768,11 @@ function LeadDetailContent({
                   }
                   if (nextStep.action === "audit") {
                     handleStartAudit();
+                  } else if (nextStep.action === "analysis") {
+                    handleStartAnalysis();
                   }
                 }}
-                disabled={isAuditing || auditStatus === "running"}
+                disabled={isAuditing || auditStatus === "running" || isRunningAnalysis}
               >
                 {nextStep.buttonText}
               </Button>

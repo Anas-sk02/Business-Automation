@@ -294,9 +294,69 @@ export interface BatchAuditResponse {
   message: string;
 }
 
+export type ConfidenceLevel = "high" | "medium" | "low";
+
+export interface AnalysisOpportunity {
+  issue: string;
+  evidence: string;
+  impact: string;
+  recommendation: string;
+}
+
+export interface AIAnalysisResult {
+  business_summary: string;
+  strengths: string[];
+  opportunities: AnalysisOpportunity[];
+  recommended_service: string;
+  pitch_angle: string;
+  confidence: ConfidenceLevel;
+}
+
+export interface ClaimVerificationItem {
+  claim: string;
+  status: VerificationStatus;
+  evidence_id?: string | null;
+  matched_finding?: string | null;
+}
+
+export interface AIAnalysis {
+  id: string;
+  lead_id: string;
+  model_used: string;
+  prompt_version: string;
+  analysis_result: AIAnalysisResult;
+  recommended_service?: string | null;
+  pitch_angle?: string | null;
+  confidence: ConfidenceLevel;
+  claim_verifications: ClaimVerificationItem[];
+  total_claims: number;
+  verified_claims: number;
+  unverified_claims: number;
+  contradicted_claims: number;
+  input_tokens: number;
+  output_tokens: number;
+  api_cost_usd: number;
+  analyzed_at: string;
+}
+
+export interface StartAnalysisResponse {
+  analysis_id?: string | null;
+  lead_id: string;
+  status: string;
+  message: string;
+}
+
+export interface BatchAnalysisResponse {
+  campaign_id: string;
+  total_eligible_leads: number;
+  analyses_enqueued: number;
+  status: string;
+  message: string;
+}
+
 export interface LeadDetail extends Lead {
   audit?: WebsiteAudit | null;
-  analysis?: Record<string, unknown> | null;
+  analysis?: AIAnalysis | null;
   evidence?: EvidenceItem[];
 }
 
