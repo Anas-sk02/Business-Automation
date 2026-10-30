@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # AI Provider
     AI_PROVIDER: str = "gemini"
     AI_API_KEY: str = ""
-    AI_MODEL: str = "gemini-2.0-flash"
+    AI_MODEL: str = "gemini-2.5-flash"
 
     # WhatsApp API (Twilio)
     WHATSAPP_PROVIDER: str = "twilio"
