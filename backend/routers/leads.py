@@ -15,7 +15,9 @@ from backend.models.audit import (
     WebsiteAuditResponse,
     EvidenceItemResponse,
 )
+from backend.models.analysis import AIAnalysisResponse, StartAnalysisResponse
 from backend.services.audit import AuditService
+from backend.services.ai_analysis import AIAnalysisService
 
 logger = logging.getLogger("signalforge.leads")
 router = APIRouter()
@@ -321,5 +323,88 @@ async def get_lead_audit_report(
             status_code=500,
             detail="Failed to retrieve website audit report",
         ) from exc
+
+
+@router.post(
+    "/leads/{id}/analyze",
+    response_model=ResponseEnvelope[StartAnalysisResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_lead_analysis(
+    background_tasks: BackgroundTasks,
+    lead: Dict[str, Any] = Depends(get_owned_lead),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> ResponseEnvelope[StartAnalysisResponse]:
+    """Trigger AI analysis, claim verification, and scoring for an owned lead in the background.
+
+    Per decisions.md Section 4:
+    - Path: POST /api/leads/{id}/analyze (202 Accepted).
+    - Asynchronously runs AIAnalysisService.analyze_lead.
+    """
+    lead_id = lead["id"]
+    user_id = user["id"]
+
+    try:
+        analysis_service = AIAnalysisService(db_client=supabase)
+        background_tasks.add_task(analysis_service.analyze_lead, lead_id, user_id)
+
+        return ResponseEnvelope(
+            data=StartAnalysisResponse(
+                analysis_id=None,
+                lead_id=lead_id,
+                status="accepted",
+                message="AI analysis started in background",
+            ),
+            message="AI analysis initiated successfully",
+        )
+    except Exception as exc:
+        logger.error(f"Error initiating AI analysis for lead {lead_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initiate AI analysis",
+        ) from exc
+
+
+@router.get(
+    "/leads/{id}/analysis",
+    response_model=ResponseEnvelope[Optional[AIAnalysisResponse]],
+    status_code=status.HTTP_200_OK,
+)
+async def get_lead_analysis(
+    lead: Dict[str, Any] = Depends(get_owned_lead),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> ResponseEnvelope[Optional[AIAnalysisResponse]]:
+    """Retrieve the latest AI analysis, cross-verified claims, and cost tracking for an owned lead."""
+    lead_id = lead["id"]
+
+    try:
+        res = (
+            supabase.table("ai_analyses")
+            .select("*")
+            .eq("lead_id", lead_id)
+            .order("analyzed_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        row = res.data[0] if res.data else None
+
+        if not row:
+            return ResponseEnvelope(
+                data=None,
+                message="No AI analysis has been performed for this lead",
+            )
+
+        analysis_model = AIAnalysisResponse(**row)
+        return ResponseEnvelope(
+            data=analysis_model,
+            message="AI analysis retrieved successfully",
+        )
+    except Exception as exc:
+        logger.error(f"Error fetching AI analysis for lead {lead_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve AI analysis",
+        ) from exc
+
 
 

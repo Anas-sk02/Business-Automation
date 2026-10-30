@@ -5,7 +5,8 @@ Conforms to public.ai_analyses in docs/database-schema.md and docs/prompts.md Se
 
 from datetime import datetime
 from typing import List, Literal, Optional
-from pydantic import BaseModel, Field
+import uuid
+from pydantic import BaseModel, Field, field_validator
 
 ConfidenceLevel = Literal["high", "medium", "low"]
 VerificationStatus = Literal["verified", "unverified", "contradicted"]
@@ -132,6 +133,32 @@ class StartAnalysisResponse(BaseModel):
     lead_id: str
     status: str
     message: str
+
+
+class BatchAnalysisRequest(BaseModel):
+    """Request payload for enqueuing batch AI analysis across campaign leads."""
+
+    lead_ids: Optional[List[str]] = Field(
+        default=None,
+        description="Optional list of specific lead UUIDs to analyze",
+    )
+    limit: int = Field(
+        default=50,
+        ge=1,
+        le=100,
+        description="Maximum leads to analyze in this batch run",
+    )
+
+    @field_validator("lead_ids")
+    @classmethod
+    def validate_lead_ids(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is not None:
+            for lid in v:
+                try:
+                    uuid.UUID(str(lid))
+                except (ValueError, AttributeError):
+                    raise ValueError(f"Invalid lead UUID: '{lid}'")
+        return v
 
 
 class BatchAnalysisResponse(BaseModel):

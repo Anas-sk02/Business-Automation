@@ -15,9 +15,11 @@ from backend.models.discovery import (
     DiscoveryStatusResponse,
 )
 from backend.models.audit import BatchAuditResponse
+from backend.models.analysis import BatchAnalysisRequest, BatchAnalysisResponse
 from backend.models.common import ResponseEnvelope, PaginatedEnvelope
 from backend.services.discovery import DiscoveryService, get_user_semaphore
 from backend.services.audit import AuditService
+from backend.services.ai_analysis import AIAnalysisService
 
 logger = logging.getLogger("signalforge.campaigns")
 router = APIRouter()
@@ -483,5 +485,89 @@ async def start_batch_campaign_audit(
             status_code=500,
             detail="Failed to initiate batch audit for campaign",
         ) from exc
+
+
+@router.post(
+    "/{id}/analyze",
+    response_model=ResponseEnvelope[BatchAnalysisResponse],
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_batch_campaign_analysis(
+    background_tasks: BackgroundTasks,
+    request: Optional[BatchAnalysisRequest] = None,
+    campaign: Dict[str, Any] = Depends(get_owned_campaign),
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> ResponseEnvelope[BatchAnalysisResponse]:
+    """Initiate batch AI analysis for eligible leads in an owned campaign.
+
+    Per decisions.md Section 4:
+    - Path: POST /api/campaigns/{id}/analyze (batch, 202 Accepted).
+    - Queues AIAnalysisService.analyze_campaign_leads in BackgroundTasks.
+    """
+    campaign_id = campaign["id"]
+    user_id = user["id"]
+    req = request or BatchAnalysisRequest()
+
+    current_status = campaign.get("status", "draft")
+    if current_status in ("paused", "stopped", "archived"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot run AI analysis while campaign is in '{current_status}' state",
+        )
+
+    try:
+        # Check eligible leads in campaign
+        leads_query = (
+            supabase.table("leads")
+            .select("id, pipeline_stage")
+            .eq("campaign_id", campaign_id)
+        )
+        if req.lead_ids:
+            leads_query = leads_query.in_("id", req.lead_ids)
+        else:
+            leads_query = leads_query.in_("pipeline_stage", ["researched", "discovered"])
+
+        leads_res = leads_query.limit(req.limit).execute()
+        candidate_leads = leads_res.data or []
+        candidate_ids = [l["id"] for l in candidate_leads]
+
+        if not candidate_ids:
+            return ResponseEnvelope(
+                data=BatchAnalysisResponse(
+                    campaign_id=campaign_id,
+                    total_eligible_leads=0,
+                    analyses_enqueued=0,
+                    status="completed",
+                    message="No eligible leads found for AI analysis",
+                ),
+                message="No leads to analyze",
+            )
+
+        analysis_service = AIAnalysisService(db_client=supabase)
+        background_tasks.add_task(
+            analysis_service.analyze_campaign_leads,
+            campaign_id,
+            user_id,
+            candidate_ids,
+            req.limit,
+        )
+
+        return ResponseEnvelope(
+            data=BatchAnalysisResponse(
+                campaign_id=campaign_id,
+                total_eligible_leads=len(candidate_ids),
+                analyses_enqueued=len(candidate_ids),
+                status="accepted",
+                message=f"Queued AI analysis for {len(candidate_ids)} lead(s) in background",
+            ),
+            message="Batch AI analysis initiated successfully",
+        )
+    except Exception as exc:
+        logger.error(f"Error starting batch AI analysis for campaign {campaign_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to initiate batch AI analysis for campaign",
+        ) from exc
+
 
 
