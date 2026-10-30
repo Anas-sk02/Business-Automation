@@ -78,6 +78,29 @@ class VerificationResult(BaseModel):
     confidence: ConfidenceLevel = Field(default="medium")
 
 
+class ScoreBreakdown(BaseModel):
+    """Component score breakdown for public.leads.score_breakdown."""
+
+    industry: int = Field(default=0, ge=0, le=20, description="Industry match (max 20)")
+    location: int = Field(default=0, ge=0, le=15, description="Location match (max 15)")
+    website: int = Field(default=0, ge=0, le=25, description="Website issues (max 25)")
+    evidence: int = Field(default=0, ge=0, le=15, description="Evidence quality (max 15)")
+    contact: int = Field(default=0, ge=0, le=10, description="Contact channel (max 10)")
+    phone: int = Field(default=0, ge=0, le=10, description="Phone available (max 10)")
+    rating: int = Field(default=0, ge=0, le=5, description="Rating >= 3.5 (max 5)")
+
+
+class ScoreResult(BaseModel):
+    """Aggregate result from ScoringService.calculate_score()."""
+
+    fit_score: int = Field(..., ge=0, le=100, description="Total clamped fit score (0-100)")
+    breakdown: ScoreBreakdown
+    reasons: List[str] = Field(default_factory=list, description="Human-readable reason strings")
+    qualifies: bool = Field(..., description="True if fit_score >= 60 and valid phone exists")
+    has_valid_phone: bool = Field(..., description="Whether lead has a registered contact phone")
+    contactable_via_whatsapp: bool = Field(..., description="True if valid phone exists and not opted out")
+
+
 class AIAnalysisResponse(BaseModel):
     """Full database representation of an AI analysis record."""
 
