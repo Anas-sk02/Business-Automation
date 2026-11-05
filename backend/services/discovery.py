@@ -37,6 +37,77 @@ PLACES_FIELD_MASK = (
     "nextPageToken"
 )
 
+# Geoapify API Endpoints
+GEOAPIFY_PLACES_URL = "https://api.geoapify.com/v2/places"
+GEOAPIFY_GEOCODE_URL = "https://api.geoapify.com/v1/geocode/search"
+
+# Keyword to Geoapify Category Mapping
+GEOAPIFY_CATEGORY_MAP = {
+    # Education & Tuition
+    "education": "education,education.school,education.college",
+    "coaching": "education,education.school,education.college",
+    "tuition": "education,education.school,education.college",
+    "classes": "education,education.school,education.college",
+    "school": "education.school,education",
+    "college": "education.college,education.university",
+    "driving": "education.driving_school",
+
+    # Healthcare & Clinics
+    "dental": "healthcare.dentist,healthcare",
+    "dentist": "healthcare.dentist,healthcare",
+    "clinic": "healthcare,healthcare.hospital,healthcare.pharmacy",
+    "hospital": "healthcare.hospital,healthcare",
+    "pharmacy": "healthcare.pharmacy,commercial.health_and_beauty",
+    "medical": "healthcare,healthcare.hospital",
+    "doctor": "healthcare,healthcare.hospital",
+    "healthcare": "healthcare,healthcare.hospital,healthcare.pharmacy",
+
+    # Food & Dining
+    "restaurant": "catering.restaurant,catering",
+    "cafe": "catering.cafe,catering",
+    "food": "catering,catering.restaurant",
+    "catering": "catering,catering.restaurant",
+    "bar": "catering.bar,catering.pub",
+    "bakery": "commercial.supermarket,catering.cafe",
+
+    # Retail & Commercial
+    "supermarket": "commercial.supermarket,commercial",
+    "grocery": "commercial.supermarket,commercial",
+    "store": "commercial,commercial.supermarket",
+    "shop": "commercial,commercial.clothing",
+    "clothing": "commercial.clothing,commercial",
+    "commercial": "commercial,commercial.supermarket",
+
+    # Fitness & Wellness
+    "gym": "sport.fitness,sport",
+    "fitness": "sport.fitness,sport",
+    "sport": "sport,sport.fitness",
+    "yoga": "sport.fitness,sport",
+    "spa": "commercial.health_and_beauty,service",
+    "salon": "commercial.health_and_beauty,service",
+    "beauty": "commercial.health_and_beauty,service",
+
+    # Real Estate & Office
+    "real estate": "office.estate_agent,office",
+    "estate": "office.estate_agent,office",
+    "property": "office.estate_agent,office",
+    "it": "office.it,office.company",
+    "software": "office.it,office.company",
+    "tech": "office.it,office.company",
+    "company": "office.company,office",
+    "office": "office,office.company",
+
+    # Automotive & Services
+    "car": "service.vehicle,service",
+    "vehicle": "service.vehicle,service",
+    "mechanic": "service.vehicle,service",
+    "repair": "service.vehicle,service",
+    "cleaning": "service.cleaning,service",
+    "travel": "service.travel_agency,service",
+    "hotel": "accommodation.hotel,accommodation",
+    "hotelier": "accommodation.hotel,accommodation",
+}
+
 # Concurrency limits: discovery 1 per user per docs/decisions.md Section 9
 _user_discovery_semaphores: dict[str, asyncio.Semaphore] = {}
 _semaphore_lock = asyncio.Lock()
@@ -240,15 +311,85 @@ class DiscoveryService:
         return spent_amount >= (max_budget * threshold_ratio)
 
     @classmethod
+    def map_query_to_geoapify_category(cls, query: str) -> str:
+        """Map free-form industry or search query to supported Geoapify category."""
+        lowered = query.lower()
+        for kw, cat in GEOAPIFY_CATEGORY_MAP.items():
+            if kw in lowered:
+                return cat
+        return "commercial,service,office"
+
+    @classmethod
+    def parse_geoapify_place(cls, feature: dict[str, Any]) -> dict[str, Any]:
+        """Map Geoapify Places API feature object to public.leads database schema."""
+        props = feature.get("properties") if isinstance(feature.get("properties"), dict) else feature
+        geometry = feature.get("geometry") if isinstance(feature.get("geometry"), dict) else {}
+        coords = geometry.get("coordinates") if isinstance(geometry.get("coordinates"), list) else []
+
+        lon = props.get("lon")
+        lat = props.get("lat")
+        if (lon is None or lat is None) and len(coords) >= 2:
+            lon, lat = coords[0], coords[1]
+
+        datasource = props.get("datasource") if isinstance(props.get("datasource"), dict) else {}
+        raw = datasource.get("raw") if isinstance(datasource.get("raw"), dict) else {}
+        contact = props.get("contact") if isinstance(props.get("contact"), dict) else {}
+
+        raw_phone = (
+            props.get("phone")
+            or contact.get("phone")
+            or raw.get("phone")
+            or raw.get("contact:phone")
+            or raw.get("phone:mobile")
+        )
+        normalized_phone = cls.normalize_phone(str(raw_phone)) if raw_phone else None
+
+        website = (
+            props.get("website")
+            or contact.get("website")
+            or raw.get("website")
+            or raw.get("contact:website")
+            or raw.get("url")
+        )
+
+        categories = props.get("categories") or []
+        if isinstance(categories, str):
+            categories = [categories]
+        primary_category = categories[0] if categories else ""
+
+        name = props.get("name") or props.get("address_line1") or ""
+        place_id = props.get("place_id") or str(raw.get("osm_id") or "") or f"geoapify_{lat}_{lon}"
+
+        rating_val = props.get("rating")
+        try:
+            rating = float(rating_val) if rating_val is not None else None
+        except (ValueError, TypeError):
+            rating = None
+
+        return {
+            "place_id": str(place_id),
+            "business_name": str(name).strip(),
+            "category": primary_category,
+            "subcategories": categories,
+            "address": props.get("formatted") or props.get("address_line2") or "",
+            "latitude": float(lat) if lat is not None else None,
+            "longitude": float(lon) if lon is not None else None,
+            "phone": normalized_phone,
+            "website_url": str(website).strip() if website else None,
+            "rating": rating,
+            "review_count": int(props.get("user_ratings_total") or 0),
+            "business_status": "OPERATIONAL",
+            "opening_hours": props.get("opening_hours") or raw.get("opening_hours", {}),
+            "source": "geoapify",
+            "pipeline_stage": "discovered",
+        }
+
+    @classmethod
     def parse_place(cls, place: dict[str, Any]) -> dict[str, Any]:
-        """Map Google Places API (New) place object to DB lead structure.
+        """Map raw place object (Google Places or Geoapify) to DB lead structure."""
+        if "properties" in place or "categories" in place or place.get("source") == "geoapify":
+            return cls.parse_geoapify_place(place)
 
-        Args:
-            place: Raw place dictionary from Google Places API (New).
-
-        Returns:
-            Structured dictionary matching public.leads schema fields.
-        """
         display_name = place.get("displayName") or {}
         name = display_name.get("text", "") if isinstance(display_name, dict) else str(display_name)
 
@@ -283,7 +424,7 @@ class DiscoveryService:
             "pipeline_stage": "discovered",
         }
 
-    async def search_places(
+    async def search_places_google(
         self,
         query: str,
         page_token: str | None = None,
@@ -388,6 +529,133 @@ class DiscoveryService:
         next_page = data.get("nextPageToken")
         return places, next_page
 
+    async def search_places_geoapify(
+        self,
+        query: str,
+        page_token: str | None = None,
+        client: httpx.AsyncClient | None = None,
+        limit: int = 20,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Execute Geoapify Places search using Geocoding + Places API.
+
+        Args:
+            query: The search query string (e.g. 'Coaching Centers in Nagpur, Maharashtra').
+            page_token: Optional offset string for pagination (e.g. '0', '20').
+            client: Optional httpx.AsyncClient.
+            limit: Maximum places to retrieve per page (default 20).
+
+        Returns:
+            Tuple of (list of place features, nextPageToken or None).
+        """
+        api_key = settings.GEOAPIFY_API_KEY
+        if not api_key:
+            raise ValueError("GEOAPIFY_API_KEY is not configured in environment settings.")
+
+        # 1. Parse search term and geographic locality
+        search_term = query
+        location = query
+        if " in " in query.lower():
+            parts = query.split(" in ")
+            search_term = parts[0].strip()
+            location = parts[-1].strip()
+        elif " near " in query.lower():
+            parts = query.split(" near ")
+            search_term = parts[0].strip()
+            location = parts[-1].strip()
+
+        # 2. Geocode location with fallback to full query
+        coords: tuple[float, float] | None = None
+
+        async def _do_geocode(c: httpx.AsyncClient, loc_str: str) -> dict[str, Any]:
+            res = await c.get(
+                GEOAPIFY_GEOCODE_URL,
+                params={"text": loc_str, "apiKey": api_key, "limit": 1},
+                timeout=12.0,
+            )
+            res.raise_for_status()
+            return res.json()
+
+        for candidate in [location, query]:
+            try:
+                if client is not None:
+                    g_data = await _do_geocode(client, candidate)
+                else:
+                    async with httpx.AsyncClient() as c:
+                        g_data = await _do_geocode(c, candidate)
+
+                features = g_data.get("features", [])
+                if features:
+                    lon = features[0].get("properties", {}).get("lon")
+                    lat = features[0].get("properties", {}).get("lat")
+                    if lon is not None and lat is not None:
+                        coords = (float(lon), float(lat))
+                        break
+            except Exception as e:
+                logger.warning(f"Geoapify geocode error for candidate '{candidate}': {e}")
+
+        if not coords:
+            logger.warning(f"Geoapify could not geocode location for query '{query}'")
+            return [], None
+
+        lon, lat = coords
+        category = self.map_query_to_geoapify_category(search_term)
+        offset = int(page_token) if (page_token and str(page_token).isdigit()) else 0
+
+        params = {
+            "categories": category,
+            "filter": f"circle:{lon},{lat},25000",
+            "bias": f"proximity:{lon},{lat}",
+            "limit": limit,
+            "offset": offset,
+            "apiKey": api_key,
+        }
+
+        async def _do_places(c: httpx.AsyncClient) -> dict[str, Any]:
+            res = await c.get(GEOAPIFY_PLACES_URL, params=params, timeout=15.0)
+            res.raise_for_status()
+            return res.json()
+
+        try:
+            if client is not None:
+                p_data = await _do_places(client)
+            else:
+                async with httpx.AsyncClient() as c:
+                    p_data = await _do_places(c)
+        except Exception as e:
+            logger.error(f"Geoapify Places API request failed for '{query}': {e}")
+            return [], None
+
+        places = p_data.get("features", [])
+        next_page = str(offset + limit) if len(places) >= limit else None
+        return places, next_page
+
+    async def search_places(
+        self,
+        query: str,
+        page_token: str | None = None,
+        client: httpx.AsyncClient | None = None,
+        provider: str | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Route place search to configured provider (geoapify or google_places).
+
+        Args:
+            query: The search query string.
+            page_token: Optional pagination token.
+            client: Optional httpx.AsyncClient.
+            provider: Optional explicit provider override ('geoapify' or 'google_places').
+
+        Returns:
+            Tuple of (list of raw place objects, nextPageToken or None).
+        """
+        effective_provider = provider or settings.DISCOVERY_PROVIDER
+        # If test mock key is configured specifically for Google Places, prioritize google_places
+        if settings.GOOGLE_PLACES_API_KEY == "test-mock-key":
+            effective_provider = "google_places"
+
+        if effective_provider == "geoapify":
+            return await self.search_places_geoapify(query, page_token=page_token, client=client)
+        return await self.search_places_google(query, page_token=page_token, client=client)
+
     def log_api_cost(
         self,
         campaign_id: str,
@@ -396,6 +664,7 @@ class DiscoveryService:
         metadata: dict[str, Any] | None = None,
         cost_usd: float | None = None,
         user_id: str | None = None,
+        service: str | None = None,
     ) -> dict[str, Any]:
         """Record external API cost to public.api_costs and update campaign spent_amount.
 
@@ -410,18 +679,25 @@ class DiscoveryService:
             metadata: Context metadata (e.g. query, results count).
             cost_usd: Optional explicit USD cost override.
             user_id: Optional UUID of user owning the campaign for tenant isolation.
+            service: Service name override ('geoapify' or 'google_places').
 
         Returns:
             Inserted api_costs record dict.
         """
-        if cost_usd is None:
-            cost_usd = settings.GOOGLE_PLACES_COST_PER_SEARCH_USD * api_calls
+        if service is None:
+            service = settings.DISCOVERY_PROVIDER
 
-        cost_inr = round(cost_usd * settings.USD_TO_INR_RATE, 2)
+        if service == "geoapify":
+            cost_usd = 0.0 if cost_usd is None else float(cost_usd)
+            cost_inr = 0.0
+        else:
+            if cost_usd is None:
+                cost_usd = settings.GOOGLE_PLACES_COST_PER_SEARCH_USD * api_calls
+            cost_inr = round(cost_usd * settings.USD_TO_INR_RATE, 2)
 
         cost_payload = {
             "campaign_id": campaign_id,
-            "service": "google_places",
+            "service": service,
             "operation": operation,
             "api_calls": api_calls,
             "cost_usd": float(cost_usd),
@@ -809,12 +1085,14 @@ class DiscoveryService:
                         )
 
                     # Log external API call cost and update spent_amount in public.api_costs & campaigns
+                    effective_provider = settings.DISCOVERY_PROVIDER
                     self.log_api_cost(
                         campaign_id=campaign_id,
                         operation="text_search",
                         api_calls=1,
-                        metadata={"query": query, "results_count": len(raw_places)},
+                        metadata={"query": query, "results_count": len(raw_places), "provider": effective_provider},
                         user_id=user_id,
+                        service=effective_provider,
                     )
 
                     # Filter by min_rating if configured (exclude places with no rating or below min_rating)

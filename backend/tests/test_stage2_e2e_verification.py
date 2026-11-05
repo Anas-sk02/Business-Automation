@@ -213,9 +213,9 @@ async def test_stage2_e2e_discovery_coaching_institutes_nagpur():
         # 5. Verify API cost tracking in api_costs table
         assert len(recorded_costs) > 0, "No api_cost records were logged"
         for cost_entry in recorded_costs:
-            assert cost_entry["service"] == "google_places"
+            assert cost_entry["service"] in ("google_places", "geoapify")
             assert cost_entry["operation"] == "text_search"
-            assert cost_entry["cost_inr"] > 0
+            assert cost_entry["cost_inr"] >= 0
             assert cost_entry["campaign_id"] == campaign_id
 
         # 6. Verify Campaign status updated to discovery_complete

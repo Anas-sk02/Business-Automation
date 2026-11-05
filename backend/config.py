@@ -10,8 +10,11 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_SERVICE_KEY: str
 
-    # Google Places API (New)
+    # Lead Discovery Provider (google_places or geoapify)
+    DISCOVERY_PROVIDER: str = "geoapify"
     GOOGLE_PLACES_API_KEY: str = ""
+    GEOAPIFY_API_KEY: str = ""
+    GEOAPIFY_COST_PER_SEARCH_USD: float = 0.0
 
     # AI Provider
     AI_PROVIDER: str = "gemini"
@@ -57,6 +60,14 @@ class Settings(BaseSettings):
         allowed = {"gemini", "claude"}
         if v.lower() not in allowed:
             raise ValueError(f"AI_PROVIDER must be one of {allowed}")
+        return v.lower()
+
+    @field_validator("DISCOVERY_PROVIDER")
+    @classmethod
+    def validate_discovery_provider(cls, v: str) -> str:
+        allowed = {"geoapify", "google_places"}
+        if v.lower() not in allowed:
+            raise ValueError(f"DISCOVERY_PROVIDER must be one of {allowed}")
         return v.lower()
 
     model_config = SettingsConfigDict(

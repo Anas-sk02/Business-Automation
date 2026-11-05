@@ -171,25 +171,30 @@ def test_log_api_cost():
     mock_campaigns_table.update.return_value = update_query
     update_query.eq.return_value = MagicMock()
 
-    service = DiscoveryService(db_client=mock_db)
-    cost = service.log_api_cost(
-        campaign_id="11111111-1111-1111-1111-111111111111",
-        operation="text_search",
-        api_calls=1,
-        metadata={"query": "test query", "results": 5},
-    )
+    orig_prov = settings.DISCOVERY_PROVIDER
+    settings.DISCOVERY_PROVIDER = "google_places"
+    try:
+        service = DiscoveryService(db_client=mock_db)
+        cost = service.log_api_cost(
+            campaign_id="11111111-1111-1111-1111-111111111111",
+            operation="text_search",
+            api_calls=1,
+            metadata={"query": "test query", "results": 5},
+        )
 
-    # Cost calculation check
-    expected_usd = settings.GOOGLE_PLACES_COST_PER_SEARCH_USD
-    expected_inr = round(expected_usd * settings.USD_TO_INR_RATE, 2)
-    assert cost["cost_usd"] == expected_usd
-    assert cost["cost_inr"] == expected_inr
-    assert cost["service"] == "google_places"
+        # Cost calculation check
+        expected_usd = settings.GOOGLE_PLACES_COST_PER_SEARCH_USD
+        expected_inr = round(expected_usd * settings.USD_TO_INR_RATE, 2)
+        assert cost["cost_usd"] == expected_usd
+        assert cost["cost_inr"] == expected_inr
+        assert cost["service"] == "google_places"
 
-    # Verify api_costs insert was called
-    mock_costs_table.insert.assert_called_once()
-    # Verify campaigns update was called with updated spent_amount
-    mock_campaigns_table.update.assert_called_once_with({"spent_amount": round(10.0 + expected_inr, 2)})
+        # Verify api_costs insert was called
+        mock_costs_table.insert.assert_called_once()
+        # Verify campaigns update was called with updated spent_amount
+        mock_campaigns_table.update.assert_called_once_with({"spent_amount": round(10.0 + expected_inr, 2)})
+    finally:
+        settings.DISCOVERY_PROVIDER = orig_prov
 
 
 def test_generate_queries_empty_validation():
@@ -226,6 +231,8 @@ def test_is_near_budget_limit():
 async def test_search_places_missing_api_key():
     """Verify ValueError is raised when GOOGLE_PLACES_API_KEY is not configured."""
     orig_key = settings.GOOGLE_PLACES_API_KEY
+    orig_prov = settings.DISCOVERY_PROVIDER
+    settings.DISCOVERY_PROVIDER = "google_places"
     try:
         settings.GOOGLE_PLACES_API_KEY = ""
         service = DiscoveryService()
@@ -233,24 +240,30 @@ async def test_search_places_missing_api_key():
             await service.search_places("test query")
     finally:
         settings.GOOGLE_PLACES_API_KEY = orig_key
+        settings.DISCOVERY_PROVIDER = orig_prov
 
 
 @pytest.mark.anyio
 async def test_search_places_timeout_handling():
     """Verify RuntimeError is raised on network timeout without exposing secrets."""
+    orig_prov = settings.DISCOVERY_PROVIDER
+    settings.DISCOVERY_PROVIDER = "google_places"
     async def timeout_handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("Connection timed out", request=request)
 
     mock_transport = httpx.MockTransport(timeout_handler)
-    async with httpx.AsyncClient(transport=mock_transport) as client:
-        orig_key = settings.GOOGLE_PLACES_API_KEY
-        try:
-            settings.GOOGLE_PLACES_API_KEY = "test-mock-key"
-            service = DiscoveryService()
-            with pytest.raises(RuntimeError, match="request timed out"):
-                await service.search_places("dentists in Nagpur", client=client)
-        finally:
-            settings.GOOGLE_PLACES_API_KEY = orig_key
+    try:
+        async with httpx.AsyncClient(transport=mock_transport) as client:
+            orig_key = settings.GOOGLE_PLACES_API_KEY
+            try:
+                settings.GOOGLE_PLACES_API_KEY = "test-mock-key"
+                service = DiscoveryService()
+                with pytest.raises(RuntimeError, match="request timed out"):
+                    await service.search_places("dentists in Nagpur", client=client)
+            finally:
+                settings.GOOGLE_PLACES_API_KEY = orig_key
+    finally:
+        settings.DISCOVERY_PROVIDER = orig_prov
 
 
 def test_log_api_cost_user_scoped():

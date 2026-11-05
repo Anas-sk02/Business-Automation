@@ -491,7 +491,9 @@ async def test_search_places_retries_on_rate_limit():
         return httpx.Response(status_code=200, json={"places": [{"id": "p_ok"}]})
 
     orig_key = settings.GOOGLE_PLACES_API_KEY
+    orig_prov = settings.DISCOVERY_PROVIDER
     settings.GOOGLE_PLACES_API_KEY = "mock-key"
+    settings.DISCOVERY_PROVIDER = "google_places"
     try:
         mock_transport = httpx.MockTransport(mock_handler)
         async with httpx.AsyncClient(transport=mock_transport) as mock_client:
@@ -502,6 +504,7 @@ async def test_search_places_retries_on_rate_limit():
                 assert mock_sleep.call_count == 1
     finally:
         settings.GOOGLE_PLACES_API_KEY = orig_key
+        settings.DISCOVERY_PROVIDER = orig_prov
 
 
 @pytest.mark.anyio
