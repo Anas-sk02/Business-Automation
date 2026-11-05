@@ -136,3 +136,29 @@ class SendMessageResponse(BaseModel):
     cost_inr: float = 0.0
 
 
+class ReplyClassificationResult(BaseModel):
+    """Structured AI output for WhatsApp reply classification."""
+
+    classification: ReplyClassification
+    confidence: float = Field(..., ge=0.0, le=1.0)
+    reasoning: str
+    suggested_action: Optional[str] = None
+
+
+class WebhookProcessResult(BaseModel):
+    """Summary of actions taken by the webhook processor."""
+
+    event_type: str
+    wa_message_id: Optional[str] = None
+    status: Optional[str] = None
+    lead_id: Optional[str] = None
+    classification: Optional[ReplyClassification] = None
+    confidence: Optional[float] = None
+    stage_transition: Optional[str] = None
+    tasks_created: int = 0
+    suppressed: bool = False
+    followups_cancelled: int = 0
+    is_duplicate: bool = False
+
+
+
