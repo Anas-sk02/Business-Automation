@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_MODEL: str = "gemini-2.5-flash"
 
-    # WhatsApp API (Twilio)
-    WHATSAPP_PROVIDER: str = "twilio"
+    # WhatsApp API (waha or twilio)
+    WHATSAPP_PROVIDER: str = "waha"
+    WAHA_BASE_URL: str = "http://127.0.0.1:3001"
+    WAHA_API_KEY: str = ""
     WHATSAPP_ACCOUNT_SID: str = ""
     WHATSAPP_AUTH_TOKEN: str = ""
     WHATSAPP_FROM_NUMBER: str = ""
@@ -68,6 +70,14 @@ class Settings(BaseSettings):
         allowed = {"geoapify", "google_places"}
         if v.lower() not in allowed:
             raise ValueError(f"DISCOVERY_PROVIDER must be one of {allowed}")
+        return v.lower()
+
+    @field_validator("WHATSAPP_PROVIDER")
+    @classmethod
+    def validate_whatsapp_provider(cls, v: str) -> str:
+        allowed = {"waha", "twilio"}
+        if v.lower() not in allowed:
+            raise ValueError(f"WHATSAPP_PROVIDER must be one of {allowed}")
         return v.lower()
 
     model_config = SettingsConfigDict(
