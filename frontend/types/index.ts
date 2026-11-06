@@ -593,5 +593,99 @@ export interface UpdateTaskRequest {
   snooze_preset?: "later_today" | "tomorrow" | "next_week" | string;
 }
 
+// Stage 7 Analytics Types per docs/decisions.md (Sections 4, 11) & docs/UI-UX.md (Section 6.11)
+export interface FunnelStep {
+  name: string;
+  count: number;
+  conversion_rate: number;
+  overall_rate: number;
+}
+
+export interface MessagingMetrics {
+  total_sent: number;
+  total_delivered: number;
+  total_read: number;
+  total_replied: number;
+  total_failed: number;
+  total_opted_out: number;
+  delivery_rate: number;
+  read_rate: number;
+  reply_rate: number;
+}
+
+export interface ServiceCostItem {
+  service: string;
+  api_calls: number;
+  cost_usd: number;
+  cost_inr: number;
+}
+
+export interface CostBreakdown {
+  services: ServiceCostItem[];
+  total_spend_usd: number;
+  total_spend_inr: number;
+  cost_per_qualified_lead_inr?: number | null;
+  cost_per_won_deal_inr?: number | null;
+}
+
+export interface AnalyticsKPIs {
+  total_campaigns: number;
+  total_leads_found: number;
+  total_audited: number;
+  total_qualified: number;
+  total_messages_sent: number;
+  total_deals_won: number;
+  total_spend_usd: number;
+  total_spend_inr: number;
+}
+
+export interface AnalyticsOverviewResponse {
+  has_sent_messages: boolean;
+  kpis: AnalyticsKPIs;
+  funnel: FunnelStep[];
+  messaging: MessagingMetrics;
+  costs: CostBreakdown;
+}
+
+export interface CampaignAnalyticsResponse {
+  campaign_id: string;
+  campaign_name: string;
+  has_sent_messages: boolean;
+  kpis: AnalyticsKPIs;
+  funnel: FunnelStep[];
+  messaging: MessagingMetrics;
+  costs: CostBreakdown;
+}
+
+export interface CostsOverviewResponse {
+  services: ServiceCostItem[];
+  total_spend_usd: number;
+  total_spend_inr: number;
+  total_businesses_processed: number;
+  cost_per_qualified_lead_inr?: number | null;
+  cost_per_won_deal_inr?: number | null;
+  cost_per_acquired_lead_inr?: number | null;
+}
+
+// Settings & Suppression Audit Types matching backend/models/settings.py
+export interface SuppressionRecord {
+  id: string;
+  phone: string;
+  business_name?: string | null;
+  campaign_id: string;
+  campaign_name: string;
+  suppression_reason?: string | null;
+  opted_out_at: string;
+}
+
+export interface SuppressionListResponse {
+  suppressed_contacts: SuppressionRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+
+
 
 
