@@ -169,6 +169,7 @@ class MessageGeneratorService:
         user_id: str,
         instructions: Optional[str] = None,
         template_name: Optional[str] = None,
+        followup_attempt: int = 0,
     ) -> WhatsAppDraftResponse:
         """Generate a personalized, evidence-backed WhatsApp outreach draft for a lead.
 
@@ -177,6 +178,7 @@ class MessageGeneratorService:
             user_id: UUID of authenticated user.
             instructions: Optional user-provided tone or offer instructions.
             template_name: Optional template name override.
+            followup_attempt: 0 for initial outreach, 1+ for subsequent follow-ups.
 
         Returns:
             WhatsAppDraftResponse containing stored message record and metadata.
@@ -234,6 +236,7 @@ class MessageGeneratorService:
             analysis=analysis,
             verified_evidence=verified_evidence,
             custom_instructions=instructions,
+            followup_attempt=followup_attempt,
         )
 
         # Invoke AI client
@@ -245,7 +248,7 @@ class MessageGeneratorService:
                 user_id=user_id,
                 service="ai_message_gen",
                 operation="message_generation",
-                metadata={"lead_id": lead_id},
+                metadata={"lead_id": lead_id, "followup_attempt": followup_attempt},
             )
         except AIClientError as exc:
             logger.error(f"AI message generation failed for lead {lead_id}: {exc}")
@@ -264,14 +267,14 @@ class MessageGeneratorService:
         lead_phone = lead.get("phone")
         normalized_phone = DiscoveryService.normalize_phone(lead_phone) if lead_phone else None
 
-        # Check for existing active attempt 0 draft (upsert semantics for uq_messages_one_live_per_attempt)
+        # Check for existing active attempt draft (upsert semantics for uq_messages_one_live_per_attempt)
         existing_res = (
             self._db.table("whatsapp_messages")
             .select("*")
             .eq("lead_id", lead_id)
             .eq("campaign_id", campaign_id)
             .eq("direction", MessageDirection.OUTBOUND.value)
-            .eq("followup_attempt", 0)
+            .eq("followup_attempt", followup_attempt)
             .execute()
         )
         active_existing = [
@@ -313,8 +316,8 @@ class MessageGeneratorService:
                 "message_body": body_text,
                 "message_type": MessageType.TEXT.value,
                 "status": MessageStatus.DRAFT.value,
-                "followup_attempt": 0,
-                "is_followup": False,
+                "followup_attempt": followup_attempt,
+                "is_followup": bool(followup_attempt > 0),
                 "conversation_cost": 0.0,
                 "created_at": now_iso,
             }
@@ -335,6 +338,7 @@ class MessageGeneratorService:
         self,
         lead_id: str,
         user_id: str,
+        followup_attempt: int = 0,
     ) -> Optional[WhatsAppDraftResponse]:
         """Fetch the current active draft message for a lead if it exists."""
         lead, campaign = await self._verify_lead_and_campaign(lead_id, user_id)
@@ -346,7 +350,7 @@ class MessageGeneratorService:
             .eq("lead_id", lead_id)
             .eq("campaign_id", campaign_id)
             .eq("direction", MessageDirection.OUTBOUND.value)
-            .eq("followup_attempt", 0)
+            .eq("followup_attempt", followup_attempt)
             .execute()
         )
         active = [

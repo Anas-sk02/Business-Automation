@@ -351,14 +351,9 @@ class WebhookProcessorService:
         suppressed = False
 
         # Cancel pending follow-ups for this lead on any inbound reply
-        cancel_res = (
-            self._db.table("followup_schedules")
-            .update({"status": "cancelled"})
-            .eq("lead_id", lead_id)
-            .eq("status", "scheduled")
-            .execute()
-        )
-        followups_cancelled = len(cancel_res.data or [])
+        from backend.services.followup import FollowupService
+        followup_svc = FollowupService(db_client=self._db)
+        followups_cancelled = await followup_svc.cancel_followups(lead_id, reason="inbound_reply")
 
         # Opt-out demand
         if classification == ReplyClassification.OPT_OUT:
@@ -412,7 +407,7 @@ class WebhookProcessorService:
                     "lead_id": lead_id,
                     "campaign_id": campaign_id,
                     "user_id": user_id,
-                    "task_type": "manual_review",
+                    "task_type": "review_reply",
                     "title": f"Review ambiguous reply from {lead.get('business_name') or 'lead'}",
                     "description": f"Reply: '{clean_body}'\nClassification: {classification.value} (confidence: {confidence:.2f})\nReasoning: {reasoning}",
                     "priority": "medium",
@@ -432,11 +427,11 @@ class WebhookProcessorService:
             if user_id:
                 biz = lead.get("business_name") or "lead"
                 if classification == ReplyClassification.MEETING_REQUEST:
-                    t_type = "meeting_prep"
+                    t_type = "schedule_meeting"
                     priority = "urgent"
                     t_title = f"Schedule meeting with {biz}"
                 elif classification == ReplyClassification.PRICING_REQUEST:
-                    t_type = "callback"
+                    t_type = "send_pricing"
                     priority = "high"
                     t_title = f"Provide pricing info to {biz}"
                 else:

@@ -520,6 +520,31 @@ class WhatsAppService:
 
         self._db.table("leads").update(lead_updates).eq("id", lead_id).eq("campaign_id", campaign_id).execute()
 
+        # 14. Follow-up scheduling lifecycle hooks
+        followup_attempt = int(message.get("followup_attempt") or 0)
+        try:
+            from backend.services.followup import FollowupService
+            followup_svc = FollowupService(db_client=self._db)
+
+            if followup_attempt == 0:
+                # Initial message sent -> schedule follow-up sequence with tenant verification
+                await followup_svc.schedule_followups(lead_id, campaign_id, user_id=user_id)
+            else:
+                # Follow-up message sent -> mark schedule as sent
+                self._db.table("followup_schedules").update({
+                    "status": "sent",
+                    "sent_at": now_iso,
+                }).eq("lead_id", lead_id).eq("campaign_id", campaign_id).eq("attempt_number", followup_attempt).execute()
+
+            # Mark any related approval task as completed (strictly tenant-scoped)
+            self._db.table("tasks").update({
+                "status": "completed",
+                "completed_at": now_iso,
+            }).eq("lead_id", lead_id).eq("campaign_id", campaign_id).eq("user_id", user_id).eq("task_type", "approve_message").eq("status", "pending").execute()
+
+        except Exception as f_err:
+            logger.warning(f"Follow-up lifecycle hook notice for lead {lead_id}: {f_err}")
+
         return SendMessageResponse(
             message=WhatsAppMessageResponse.model_validate(saved_msg),
             lead_id=lead_id,

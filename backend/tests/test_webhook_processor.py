@@ -202,7 +202,7 @@ def base_db():
             "id": "fup_001",
             "lead_id": "lead_001",
             "campaign_id": "camp_001",
-            "status": "scheduled",
+            "status": "pending",
         }
     ]
     return db
@@ -376,7 +376,7 @@ async def test_inbound_meeting_request_creates_urgent_task(base_db, mock_ai_clie
     assert result.classification == ReplyClassification.MEETING_REQUEST
     assert result.stage_transition == "interested"
     assert len(base_db.tasks_data) == 1
-    assert base_db.tasks_data[0]["task_type"] == "meeting_prep"
+    assert base_db.tasks_data[0]["task_type"] == "schedule_meeting"
     assert base_db.tasks_data[0]["priority"] == "urgent"
 
 
@@ -413,7 +413,7 @@ async def test_inbound_low_confidence_creates_manual_review_task(base_db, mock_a
     assert result.stage_transition == "replied"
     assert base_db.leads_data[0]["pipeline_stage"] == "replied"
     assert len(base_db.tasks_data) == 1
-    assert base_db.tasks_data[0]["task_type"] == "manual_review"
+    assert base_db.tasks_data[0]["task_type"] == "review_reply"
     assert base_db.tasks_data[0]["priority"] == "medium"
 
 
@@ -485,7 +485,7 @@ async def test_inbound_empty_body_classified_as_unclear(base_db, mock_ai_client)
     # AI not called for empty/media message
     mock_ai_client.generate_structured_output.assert_not_called()
     assert len(base_db.tasks_data) == 1
-    assert base_db.tasks_data[0]["task_type"] == "manual_review"
+    assert base_db.tasks_data[0]["task_type"] == "review_reply"
 
 
 @pytest.mark.anyio

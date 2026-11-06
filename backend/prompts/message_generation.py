@@ -10,6 +10,7 @@ def build_message_generation_prompt(
     analysis: Optional[Dict[str, Any]] = None,
     verified_evidence: Optional[List[Dict[str, Any]]] = None,
     custom_instructions: Optional[str] = None,
+    followup_attempt: int = 0,
 ) -> str:
     """Build structured prompt for AI to generate a high-converting, honest WhatsApp message.
 
@@ -71,6 +72,16 @@ def build_message_generation_prompt(
         if custom_instructions
         else ""
     )
+    followup_block = (
+        f"### CONTEXT: FOLLOW-UP OUTREACH #{followup_attempt}\n"
+        f"- This is follow-up #{followup_attempt} to an earlier message that received no reply.\n"
+        f"- Keep the message extra concise (under 75 words), warm, polite, and respectful.\n"
+        f"- Do NOT make the prospect feel guilty or rushed. Gently check if they had a chance to review the previous note.\n"
+        f"- End with a low-friction question and the mandatory opt-out line.\n"
+        if followup_attempt > 0
+        else ""
+    )
+
     custom_instructions_block = (
         f"### USER CUSTOM INSTRUCTIONS:\n<user_guidance>\n{custom_inst_clean}\n</user_guidance>\n"
         if custom_inst_clean
@@ -116,6 +127,8 @@ Your job is to write a warm, respectful, concise WhatsApp outreach message from 
      - Variable 3: 1 short sentence summarizing the primary verified finding (e.g. "mobile layout issues making it hard for parents to read on phone")
      - Variable 4: {sender_name}
      - Variable 5: {sender_company}
+
+{followup_block}
 
 {custom_instructions_block}
 
