@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from fastapi import Header, HTTPException, Depends
 
 from backend.database import supabase
+from backend.services.analytics import AnalyticsService
 
 logger = logging.getLogger("signalforge.auth")
 
@@ -182,3 +183,9 @@ async def get_owned_task(
             status_code=404,
             detail=f"Task with ID '{target_id}' not found",
         ) from exc
+
+
+def get_analytics_service() -> AnalyticsService:
+    """Dependency helper to return an instance of AnalyticsService."""
+    return AnalyticsService()
+
