@@ -82,11 +82,24 @@ class GeneratedOutreachMessage(BaseModel):
 class GenerateDraftRequest(BaseModel):
     """Request payload to generate an AI outreach message draft."""
 
-    lead_id: str
+    lead_id: Optional[str] = None
     template_name: Optional[str] = None
     instructions: Optional[str] = Field(
         default=None,
         description="Optional custom user instruction for tone or specific offer",
+    )
+
+
+class SendMessageRequest(BaseModel):
+    """Optional request payload when dispatching an approved message."""
+
+    message_id: Optional[str] = Field(
+        default=None,
+        description="Optional explicit message UUID. If omitted, active approved draft is sent.",
+    )
+    ignore_quiet_hours: bool = Field(
+        default=False,
+        description="Set to true to explicitly override quiet hours safeguard for manual testing/send.",
     )
 
 
@@ -96,6 +109,15 @@ class UpdateDraftRequest(BaseModel):
     message_body: str = Field(..., min_length=1, max_length=2000)
     template_variables: Optional[Dict[str, Any]] = None
     status: Optional[MessageStatus] = None
+
+    @field_validator("message_body")
+    @classmethod
+    def validate_message_body(cls, value: str) -> str:
+        """Ensure message body is not blank whitespace."""
+        clean = value.strip()
+        if not clean:
+            raise ValueError("message_body cannot be empty or purely whitespace")
+        return clean
 
     @field_validator("status")
     @classmethod

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api";
 import type {
   LeadDetail,
+  PipelineStage,
   ResponseEnvelope,
   StartAuditResponse,
   FullAuditReport,
@@ -15,6 +16,7 @@ import type {
 import { ScoreLedger } from "@/components/lead/ScoreLedger";
 import { AuditReport } from "@/components/audit/AuditReport";
 import { AIAnalysis } from "@/components/analysis/AIAnalysis";
+import { WhatsAppChat } from "@/components/whatsapp/WhatsAppChat";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -28,7 +30,6 @@ import {
   Globe,
   MapPin,
   Clock,
-  Sparkles,
   Check,
   Smartphone,
 } from "lucide-react";
@@ -718,18 +719,19 @@ function LeadDetailContent({
 
             {/* Tab: WhatsApp */}
             {activeTab === "whatsapp" && (
-              <div className="rounded-lg border border-border bg-card p-6 text-center">
-                <Smartphone className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-2 text-sm font-medium text-foreground">
-                  WhatsApp outreach workspace
-                </h3>
-                <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                  Review generated message drafts, manage conversation threads, and send follow-ups.
-                </p>
-                <Button variant="outline" size="sm" className="mt-4" disabled>
-                  Outreach available in Stage 5
-                </Button>
-              </div>
+              <WhatsAppChat
+                leadId={lead.id}
+                leadName={lead.business_name}
+                recipientPhone={lead.phone}
+                isSuppressed={lead.is_suppressed}
+                suppressionReason={lead.suppression_reason}
+                pipelineStage={lead.pipeline_stage}
+                onStageChange={(newStage) =>
+                  setLead((prev) =>
+                    prev ? { ...prev, pipeline_stage: newStage as PipelineStage } : null
+                  )
+                }
+              />
             )}
 
             {/* Tab: Tasks */}

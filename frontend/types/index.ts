@@ -360,3 +360,96 @@ export interface LeadDetail extends Lead {
   evidence?: EvidenceItem[];
 }
 
+// ============================================================
+// WhatsApp Integration Types (Stage 5)
+// ============================================================
+
+export type MessageDirection = "outbound" | "inbound";
+
+export type MessageType = "text" | "template" | "image" | "document";
+
+export type MessageStatus =
+  | "draft"
+  | "pending_approval"
+  | "approved"
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | "cancelled";
+
+export type ReplyClassification =
+  | "interested"
+  | "wants_info"
+  | "pricing_request"
+  | "meeting_request"
+  | "not_interested"
+  | "not_now"
+  | "wrong_number"
+  | "opt_out"
+  | "unclear";
+
+export interface WhatsAppMessage {
+  id: string;
+  lead_id: string;
+  campaign_id: string;
+  wa_message_id?: string | null;
+  direction: MessageDirection;
+  from_number?: string | null;
+  to_number?: string | null;
+  template_name?: string | null;
+  template_variables?: Record<string, unknown>;
+  message_body: string;
+  message_type: MessageType;
+  status: MessageStatus;
+  error_message?: string | null;
+  reply_classification?: ReplyClassification | null;
+  classification_confidence?: number | null;
+  followup_attempt: number;
+  is_followup: boolean;
+  conversation_cost: number;
+  created_at: string;
+  sent_at?: string | null;
+  delivered_at?: string | null;
+  read_at?: string | null;
+  failed_at?: string | null;
+}
+
+export interface WhatsAppDraftResponse {
+  message: WhatsAppMessage;
+  lead_id: string;
+  lead_name: string;
+  recipient_phone?: string | null;
+  evidence_cited: string[];
+  estimated_cost_inr: number;
+  status: MessageStatus;
+}
+
+export interface SendMessageResponse {
+  message: WhatsAppMessage;
+  lead_id: string;
+  recipient_phone: string;
+  provider: string;
+  wa_message_id: string;
+  sent_at: string;
+  cost_inr: number;
+}
+
+export interface GenerateDraftRequest {
+  instructions?: string;
+  template_name?: string;
+}
+
+export interface UpdateDraftRequest {
+  message_body: string;
+  template_variables?: Record<string, unknown>;
+  status?: MessageStatus;
+}
+
+export interface SendMessageRequest {
+  message_id?: string;
+  ignore_quiet_hours?: boolean;
+}
+
+

@@ -166,10 +166,12 @@ async def health_check() -> dict:
 from backend.routers.auth import router as auth_router
 from backend.routers.campaigns import router as campaigns_router
 from backend.routers.leads import router as leads_router
+from backend.routers.whatsapp import router as whatsapp_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["Campaigns"])
 app.include_router(leads_router, prefix="/api", tags=["Leads"])
+app.include_router(whatsapp_router, prefix="/api", tags=["WhatsApp"])
 
 
 
