@@ -55,9 +55,7 @@ function groupTasks(tasks, referenceDate = new Date()) {
 }
 
 function computeSnoozeTimestamp(preset, now = new Date()) {
-  const IST_OFFSET_MS = 5.5 * 3600 * 1000;
   const nowUtc = now.getTime();
-  const nowIst = new Date(nowUtc + IST_OFFSET_MS);
 
   if (preset === "later_today") {
     return new Date(nowUtc + 4 * 3600 * 1000);

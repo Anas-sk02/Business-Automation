@@ -18,11 +18,9 @@ from backend.models.analysis import (
     ClaimVerificationItem,
     AIAnalysisResponse,
     BatchAnalysisResponse,
-    StartAnalysisResponse,
 )
 from backend.prompts.industry_contexts import (
     INDUSTRY_CONTEXTS,
-    INDUSTRY_ALIASES,
     get_industry_context,
 )
 from backend.prompts.business_analysis import (

@@ -30,19 +30,6 @@ const ALLOWED_MANUAL_STAGES = [
   "not_interested",
 ];
 
-const AUTOMATED_STAGES = [
-  "discovered",
-  "research_pending",
-  "researched",
-  "qualified",
-  "contacted",
-  "followup_due",
-  "replied",
-  "interested",
-  "no_response",
-  "opted_out",
-];
-
 // Logic helpers replicating component behavior in PipelineBoard.tsx & PipelineColumn.tsx
 function isManualDropPermitted(targetStage) {
   return ALLOWED_MANUAL_STAGES.includes(targetStage);

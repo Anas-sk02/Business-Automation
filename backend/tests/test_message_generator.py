@@ -22,7 +22,6 @@ from backend.models.whatsapp import (
     GeneratedOutreachMessage,
     MessageDirection,
     MessageStatus,
-    MessageType,
     UpdateDraftRequest,
     WhatsAppDraftResponse,
 )

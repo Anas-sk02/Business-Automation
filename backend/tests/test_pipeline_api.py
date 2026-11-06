@@ -1,6 +1,5 @@
 """Integration tests for Stage 6 Task 3: Pipeline API & Stage Transition Router."""
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient

@@ -13,7 +13,6 @@ import type {
   PipelineBoardResponse,
 } from "@/types";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Plus, ArrowRight, AlertCircle, ExternalLink } from "lucide-react";
 
 function getStatusBadge(status: CampaignStatus) {

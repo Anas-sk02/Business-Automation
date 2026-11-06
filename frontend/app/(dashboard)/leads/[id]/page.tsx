@@ -12,11 +12,16 @@ import type {
   FullAuditReport,
   AIAnalysis as AIAnalysisType,
   StartAnalysisResponse,
+  TaskResponse,
+  TaskListResponse,
+  TaskStatus,
+  SnoozePreset,
 } from "@/types";
 import { ScoreLedger } from "@/components/lead/ScoreLedger";
 import { AuditReport } from "@/components/audit/AuditReport";
 import { AIAnalysis } from "@/components/analysis/AIAnalysis";
 import { WhatsAppChat } from "@/components/whatsapp/WhatsAppChat";
+import { TaskRow } from "@/components/tasks/TaskRow";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -31,7 +36,6 @@ import {
   MapPin,
   Clock,
   Check,
-  Smartphone,
 } from "lucide-react";
 
 type LeadTab = "audit" | "analysis" | "whatsapp" | "tasks";
@@ -340,6 +344,44 @@ function LeadDetailContent({
   const [isRunningAnalysis, setIsRunningAnalysis] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
+  // Lead Tasks state
+  const [leadTasks, setLeadTasks] = useState<TaskResponse[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+
+  const fetchLeadTasks = async () => {
+    try {
+      setTasksLoading(true);
+      setTasksError(null);
+      const res = await api.get<{ data: TaskListResponse }>(`/api/tasks?lead_id=${leadId}`);
+      if (res?.data?.tasks) {
+        setLeadTasks(res.data.tasks);
+      }
+    } catch (err: unknown) {
+      setTasksError(err instanceof Error ? err.message : "Failed to load tasks for this lead.");
+    } finally {
+      setTasksLoading(false);
+    }
+  };
+
+  const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+    try {
+      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
+      await fetchLeadTasks();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleTaskSnooze = async (taskId: string, preset: SnoozePreset) => {
+    try {
+      await api.put(`/api/tasks/${taskId}`, { snooze_preset: preset });
+      await fetchLeadTasks();
+    } catch {
+      // ignore
+    }
+  };
+
   const fetchAnalysis = async () => {
     try {
       setIsLoadingAnalysis(true);
@@ -387,6 +429,7 @@ function LeadDetailContent({
 
   useEffect(() => {
     fetchLead();
+    fetchLeadTasks();
   }, [leadId]);
 
   const handleStartAudit = async () => {
@@ -736,13 +779,41 @@ function LeadDetailContent({
 
             {/* Tab: Tasks */}
             {activeTab === "tasks" && (
-              <div className="rounded-lg border border-border bg-card p-6 text-center">
-                <Clock className="mx-auto size-8 text-muted-foreground" />
-                <h3 className="mt-2 text-sm font-medium text-foreground">Tasks and activity</h3>
-                <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
-                  Scheduled follow-ups, meeting preparations, and audit review tasks will appear here.
-                </p>
-                <p className="mt-4 text-xs text-muted-foreground">No active tasks for this lead.</p>
+              <div className="space-y-4">
+                {tasksError && (
+                  <div className="p-3 rounded-md border border-problem/30 bg-problem-soft text-problem flex items-center justify-between text-xs">
+                    <span>{tasksError}</span>
+                    <Button variant="ghost" size="sm" onClick={fetchLeadTasks} className="h-6 px-2 text-xs">
+                      Retry
+                    </Button>
+                  </div>
+                )}
+                {tasksLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-14 w-full" />
+                    <Skeleton className="h-14 w-full" />
+                  </div>
+                ) : leadTasks.length === 0 ? (
+                  <div className="rounded-lg border border-border bg-card p-6 text-center">
+                    <Clock className="mx-auto size-8 text-muted-foreground" />
+                    <h3 className="mt-2 text-sm font-medium text-foreground">Tasks and activity</h3>
+                    <p className="mt-1 text-xs text-muted-foreground max-w-sm mx-auto">
+                      Scheduled follow-ups, meeting preparations, and audit review tasks will appear here.
+                    </p>
+                    <p className="mt-4 text-xs text-muted-foreground">No active tasks for this lead.</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-border bg-card divide-y divide-border">
+                    {leadTasks.map((task) => (
+                      <TaskRow
+                        key={task.id}
+                        task={task}
+                        onStatusChanged={handleTaskStatusChange}
+                        onSnooze={handleTaskSnooze}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

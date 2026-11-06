@@ -14,7 +14,7 @@ Validates:
 - Remote failure handling (status -> 'failed')
 """
 
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
@@ -22,14 +22,9 @@ import httpx
 import pytest
 
 from backend.config import settings
-from backend.models.whatsapp import (
-    MessageDirection,
-    MessageStatus,
-    SendMessageResponse,
-)
+from backend.models.whatsapp import SendMessageResponse
 from backend.services.whatsapp import (
     CampaignBudgetExceededError,
-    DailyLimitExceededError,
     LeadSuppressedError,
     MessageAlreadySentError,
     MessageNotApprovedError,

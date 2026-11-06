@@ -3,7 +3,6 @@
 import pytest
 from datetime import datetime, time, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from zoneinfo import ZoneInfo
 
 from backend.models.whatsapp import (
     MessageDirection,

@@ -11,7 +11,7 @@ and automatic pipeline stage progression conforming to:
 
 from datetime import datetime, time, timezone
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 import httpx
 

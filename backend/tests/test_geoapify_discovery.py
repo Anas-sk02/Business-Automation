@@ -5,11 +5,7 @@ import httpx
 import pytest
 
 from backend.config import settings
-from backend.services.discovery import (
-    DiscoveryService,
-    GEOAPIFY_PLACES_URL,
-    GEOAPIFY_GEOCODE_URL,
-)
+from backend.services.discovery import DiscoveryService
 
 
 def test_geoapify_category_mapping():

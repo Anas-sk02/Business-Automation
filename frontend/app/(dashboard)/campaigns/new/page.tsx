@@ -240,7 +240,7 @@ export default function NewCampaignPage() {
             </Label>
             <Input
               id="camp-name"
-              placeholder="e.g. Nagpur Coaching Centers Q4"
+              placeholder="Campaign name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="h-9"
@@ -274,7 +274,7 @@ export default function NewCampaignPage() {
             </Label>
             <Input
               id="camp-location"
-              placeholder="e.g. Pune, Maharashtra"
+              placeholder="City or area"
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="h-9"
@@ -288,7 +288,7 @@ export default function NewCampaignPage() {
               </Label>
               <Input
                 id="camp-custom-industry"
-                placeholder="e.g. Interior Designers & Architects"
+                placeholder="Industry title"
                 value={customIndustryLabel}
                 onChange={(e) => setCustomIndustryLabel(e.target.value)}
                 className="h-9"
@@ -308,7 +308,7 @@ export default function NewCampaignPage() {
             <Label htmlFor="camp-keywords">Additional search keywords (Optional)</Label>
             <Input
               id="camp-keywords"
-              placeholder="Comma-separated: IIT JEE, NEET, foundation classes"
+              placeholder="Keywords separated by commas"
               value={keywordsInput}
               onChange={(e) => setKeywordsInput(e.target.value)}
               className="h-9"
@@ -385,7 +385,7 @@ export default function NewCampaignPage() {
               <Label htmlFor="camp-custom-service">Specify custom service</Label>
               <Input
                 id="camp-custom-service"
-                placeholder="e.g. WhatsApp Automation Bot"
+                placeholder="Custom service name"
                 value={customService}
                 onChange={(e) => setCustomService(e.target.value)}
                 className="h-9"

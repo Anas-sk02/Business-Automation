@@ -12,7 +12,6 @@ Validates:
 - Clamping of total score to [0, 100]
 """
 
-import pytest
 from backend.models.analysis import VerificationResult
 from backend.services.scoring import ScoringService, QUALIFY_SCORE
 

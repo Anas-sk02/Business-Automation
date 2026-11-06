@@ -4,7 +4,7 @@ Verifies GET /api/analytics/overview, GET /api/analytics/campaign/{id},
 and GET /api/analytics/costs endpoints per docs/decisions.md (Sections 4, 11).
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 import pytest
 from fastapi.testclient import TestClient
 

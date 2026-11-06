@@ -1,6 +1,5 @@
 import os
 import re
-import pytest
 
 WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 MIGRATION_001 = os.path.join(WORKSPACE_ROOT, "supabase", "migrations", "001_initial_schema.sql")

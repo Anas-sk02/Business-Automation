@@ -1,6 +1,5 @@
 """Integration tests for Stage 3 Task 5: Single & Batch Audit API Endpoints & State Machine."""
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient

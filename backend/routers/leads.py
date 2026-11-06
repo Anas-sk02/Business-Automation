@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
 
 from backend.database import supabase

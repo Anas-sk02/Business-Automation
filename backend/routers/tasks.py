@@ -16,7 +16,6 @@ from backend.models.task import (
     TaskPriority,
     TaskResponse,
     TaskStatus,
-    TaskType,
     UpdateTaskRequest,
 )
 

@@ -57,7 +57,7 @@ export function isIndianQuietHours(date = new Date()): boolean {
 
 export function MessageDraftEditor({
   draft,
-  leadId,
+  leadId: _leadId,
   leadName,
   recipientPhone,
   isSuppressed = false,

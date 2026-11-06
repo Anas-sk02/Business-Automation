@@ -10,7 +10,7 @@ Per docs/decisions.md Section 9:
 - Job execution state lives in the database, never solely in memory.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import logging
 from typing import Any, Dict, Optional
 

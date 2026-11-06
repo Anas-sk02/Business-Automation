@@ -102,6 +102,7 @@ function CampaignDetailContent({
   const [actionLoading, setActionLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [batchActionMessage, setBatchActionMessage] = useState<string | null>(null);
 
   // Delete confirmation dialog state
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -161,6 +162,44 @@ function CampaignDetailContent({
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update campaign state.";
+      setActionError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBatchAudit = async () => {
+    if (!campaign) return;
+    setActionLoading(true);
+    setActionError(null);
+    setBatchActionMessage(null);
+    try {
+      const res = await api.post<{ data: { message: string } }>(
+        `/api/campaigns/${campaign.id}/start-audit`
+      );
+      setBatchActionMessage(res?.data?.message || "Batch website audit initiated.");
+      setTableRefreshKey((k) => k + 1);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start batch audit.";
+      setActionError(msg);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleBatchAnalyze = async () => {
+    if (!campaign) return;
+    setActionLoading(true);
+    setActionError(null);
+    setBatchActionMessage(null);
+    try {
+      const res = await api.post<{ data: { message: string } }>(
+        `/api/campaigns/${campaign.id}/analyze`
+      );
+      setBatchActionMessage(res?.data?.message || "Batch AI analysis initiated.");
+      setTableRefreshKey((k) => k + 1);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start batch analysis.";
       setActionError(msg);
     } finally {
       setActionLoading(false);
@@ -290,6 +329,19 @@ function CampaignDetailContent({
         </div>
       )}
 
+      {/* Batch Action Success Banner */}
+      {batchActionMessage && (
+        <div className="p-3.5 rounded-md bg-good-soft border border-good/30 text-good flex items-center justify-between text-xs">
+          <span>{batchActionMessage}</span>
+          <button
+            onClick={() => setBatchActionMessage(null)}
+            className="text-good font-medium hover:underline ml-2"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Header: Breadcrumbs + Title + Action Buttons */}
       <div className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -330,6 +382,32 @@ function CampaignDetailContent({
                   <Search className="mr-1.5 h-3.5 w-3.5" />
                 )}
                 {campaign.status === "discovery_complete" ? "Discover more leads" : "Start discovery"}
+              </Button>
+            )}
+
+            {/* Batch Audit action */}
+            {campaign.total_leads_found > 0 && campaign.status !== "discovering" && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                onClick={handleBatchAudit}
+                className="h-8 text-xs border-border hover:bg-muted"
+              >
+                Batch audit
+              </Button>
+            )}
+
+            {/* Batch Analyze action */}
+            {campaign.total_leads_found > 0 && campaign.status !== "discovering" && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={actionLoading}
+                onClick={handleBatchAnalyze}
+                className="h-8 text-xs border-border hover:bg-muted"
+              >
+                Batch analyze
               </Button>
             )}
 

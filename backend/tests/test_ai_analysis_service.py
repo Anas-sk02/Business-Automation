@@ -16,7 +16,6 @@ Validates:
 - Batch campaign orchestration with concurrency and error aggregation
 """
 
-import asyncio
 from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock
 import pytest

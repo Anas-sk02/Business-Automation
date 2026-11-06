@@ -10,11 +10,10 @@ import {
   Filter,
   ListTodo,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TaskRow } from "./TaskRow";
 import { api, ApiClientError } from "@/lib/api";
-import type { TaskResponse, TaskPriority } from "@/types";
+import type { TaskResponse } from "@/types";
 
 interface TaskListProps {
   tasks: TaskResponse[];

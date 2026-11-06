@@ -199,7 +199,7 @@ export function ProfileSettings() {
                 id="full_name"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="e.g. John Doe"
+                placeholder="Full name"
                 className="h-9 text-xs"
                 maxLength={100}
               />
@@ -214,7 +214,7 @@ export function ProfileSettings() {
                 id="company_name"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="e.g. Apex Digital Solutions"
+                placeholder="Company name"
                 className="h-9 text-xs"
                 maxLength={100}
               />
@@ -286,7 +286,7 @@ export function ProfileSettings() {
                     handleAddService();
                   }
                 }}
-                placeholder="e.g. Website Redesign, SEO"
+                placeholder="Service name (e.g. Website Redesign)"
                 className="h-8 text-xs"
                 maxLength={50}
               />

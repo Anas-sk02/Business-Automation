@@ -17,11 +17,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from backend.models.whatsapp import (
-    MessageDirection,
-    MessageStatus,
     ReplyClassification,
     ReplyClassificationResult,
-    WebhookProcessResult,
 )
 from backend.prompts.reply_classification import build_reply_classification_prompt
 from backend.services.ai_client import AIResult

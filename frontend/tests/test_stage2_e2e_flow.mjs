@@ -173,7 +173,7 @@ describe("Stage 2 End-to-End Frontend Flow Verification", () => {
       opted_out: "closed",
     };
 
-    for (const [stage, expectedTone] of Object.entries(stageTones)) {
+    for (const [_stage, expectedTone] of Object.entries(stageTones)) {
       const isPetrol = expectedTone === "petrol";
       const isGood = expectedTone === "good";
       const isClosed = expectedTone === "closed";
