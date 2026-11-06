@@ -141,3 +141,44 @@ async def get_owned_lead(
             status_code=404,
             detail=f"Lead with ID '{target_id}' not found",
         ) from exc
+
+
+async def get_owned_task(
+    id: str = "",
+    task_id: str = "",
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Verify task exists and belongs to the authenticated user.
+
+    Per decisions.md Section 3: If unowned or nonexistent, return 404 (not 403).
+    """
+    target_id = id or task_id
+    if not target_id:
+        raise HTTPException(
+            status_code=404,
+            detail="Task ID is required",
+        )
+    _validate_uuid(target_id, "Task")
+
+    try:
+        response = (
+            supabase.table("tasks")
+            .select("*")
+            .eq("id", target_id)
+            .eq("user_id", user["id"])
+            .execute()
+        )
+        if not response.data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Task with ID '{target_id}' not found",
+            )
+        return response.data[0]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Error checking ownership for task {target_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task with ID '{target_id}' not found",
+        ) from exc

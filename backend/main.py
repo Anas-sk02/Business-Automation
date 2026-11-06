@@ -92,8 +92,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await recover_stale_discovery_jobs()
     await recover_stale_audit_jobs()
 
+    # Start in-process background task scheduler (docs/decisions.md Section 9)
+    from backend.scheduler import start_scheduler, stop_scheduler
+    start_scheduler()
+
     yield
     logger.info("SignalForge AI backend shutting down...")
+    stop_scheduler()
 
 
 app = FastAPI(
@@ -167,11 +172,15 @@ from backend.routers.auth import router as auth_router
 from backend.routers.campaigns import router as campaigns_router
 from backend.routers.leads import router as leads_router
 from backend.routers.whatsapp import router as whatsapp_router
+from backend.routers.pipeline import router as pipeline_router
+from backend.routers.tasks import router as tasks_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["Campaigns"])
 app.include_router(leads_router, prefix="/api", tags=["Leads"])
 app.include_router(whatsapp_router, prefix="/api", tags=["WhatsApp"])
+app.include_router(pipeline_router, prefix="/api", tags=["Pipeline"])
+app.include_router(tasks_router, prefix="/api", tags=["Tasks"])
 
 
 

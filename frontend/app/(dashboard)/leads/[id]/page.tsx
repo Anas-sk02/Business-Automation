@@ -34,9 +34,9 @@ import {
   Smartphone,
 } from "lucide-react";
 
-export type LeadTab = "audit" | "analysis" | "whatsapp" | "tasks";
+type LeadTab = "audit" | "analysis" | "whatsapp" | "tasks";
 
-export function sanitizeUrl(rawUrl: string | null | undefined): string | null {
+function sanitizeUrl(rawUrl: string | null | undefined): string | null {
   if (!rawUrl) return null;
   const trimmed = rawUrl.trim();
   if (!trimmed) return null;
@@ -53,12 +53,12 @@ export function sanitizeUrl(rawUrl: string | null | undefined): string | null {
   return null;
 }
 
-export function sanitizePhone(rawPhone: string | null | undefined): string {
+function sanitizePhone(rawPhone: string | null | undefined): string {
   if (!rawPhone) return "";
   return rawPhone.replace(/[^\d+]/g, "");
 }
 
-export function getStageChipInfo(stage: string) {
+function getStageChipInfo(stage: string) {
   const norm = String(stage || "").toLowerCase();
   switch (norm) {
     case "discovered":
@@ -177,7 +177,7 @@ export function getStageChipInfo(stage: string) {
   }
 }
 
-export function getRecommendedNextStep(
+function getRecommendedNextStep(
   stage: string,
   auditStatus?: string | null
 ): {

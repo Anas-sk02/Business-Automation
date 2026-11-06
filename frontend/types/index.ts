@@ -452,4 +452,146 @@ export interface SendMessageRequest {
   ignore_quiet_hours?: boolean;
 }
 
+// ============================================================
+// Stage 6: Pipeline & Kanban Board Types
+// ============================================================
+
+export type ManualPipelineStage =
+  | "meeting_scheduled"
+  | "proposal_sent"
+  | "negotiation"
+  | "won"
+  | "closed_lost"
+  | "not_interested";
+
+export const ALLOWED_MANUAL_STAGES: readonly ManualPipelineStage[] = [
+  "meeting_scheduled",
+  "proposal_sent",
+  "negotiation",
+  "won",
+  "closed_lost",
+  "not_interested",
+] as const;
+
+export const ACTIVE_PIPELINE_COLUMNS: readonly PipelineStage[] = [
+  "qualified",
+  "contacted",
+  "followup_due",
+  "replied",
+  "interested",
+  "meeting_scheduled",
+  "proposal_sent",
+  "negotiation",
+  "won",
+] as const;
+
+export const CLOSED_RAIL_COLUMNS: readonly PipelineStage[] = [
+  "not_interested",
+  "no_response",
+  "closed_lost",
+  "opted_out",
+] as const;
+
+export interface PipelineLeadCard {
+  id: string;
+  campaign_id: string;
+  campaign_name?: string | null;
+  business_name: string;
+  category?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  website_url?: string | null;
+  fit_score: number;
+  pipeline_stage: PipelineStage;
+  rating?: number | null;
+  review_count: number;
+  notes?: string;
+  is_suppressed: boolean;
+  last_contacted_at?: string | null;
+  next_followup_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface PipelineBoardResponse {
+  columns: Record<string, PipelineLeadCard[]>;
+  closed: Record<string, PipelineLeadCard[]>;
+  stage_counts: Record<string, number>;
+  total_active_leads: number;
+  total_leads: number;
+}
+
+export interface UpdateLeadStageRequest {
+  stage: ManualPipelineStage | string;
+  notes?: string;
+}
+
+// ============================================================
+// Stage 6: Tasks Management Types
+// ============================================================
+
+export type TaskType =
+  | "followup"
+  | "callback"
+  | "review_lead"
+  | "review_reply"
+  | "approve_message"
+  | "send_info"
+  | "send_pricing"
+  | "schedule_meeting"
+  | "meeting_followup"
+  | "send_proposal"
+  | "general";
+
+export type TaskStatus =
+  | "pending"
+  | "in_progress"
+  | "completed"
+  | "snoozed"
+  | "cancelled";
+
+export type TaskPriority = "urgent" | "high" | "medium" | "low";
+
+export interface TaskResponse {
+  id: string;
+  lead_id?: string | null;
+  lead_name?: string | null;
+  campaign_id?: string | null;
+  campaign_name?: string | null;
+  user_id: string;
+  task_type: TaskType | string;
+  title: string;
+  description?: string;
+  status: TaskStatus | string;
+  priority: TaskPriority | string;
+  due_date?: string | null;
+  snoozed_until?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface TaskGroupCounts {
+  overdue: number;
+  today: number;
+  upcoming: number;
+  completed: number;
+  total: number;
+}
+
+export interface TaskListResponse {
+  tasks: TaskResponse[];
+  counts: TaskGroupCounts;
+}
+
+export interface UpdateTaskRequest {
+  status?: TaskStatus | string;
+  priority?: TaskPriority | string;
+  title?: string;
+  description?: string;
+  due_date?: string | null;
+  snoozed_until?: string | null;
+  snooze_preset?: "later_today" | "tomorrow" | "next_week" | string;
+}
+
+
 
