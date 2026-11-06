@@ -243,7 +243,7 @@ class MessageGeneratorService:
                 schema_class=GeneratedOutreachMessage,
                 campaign_id=campaign_id,
                 user_id=user_id,
-                service="whatsapp_outreach",
+                service="ai_message_gen",
                 operation="message_generation",
                 metadata={"lead_id": lead_id},
             )

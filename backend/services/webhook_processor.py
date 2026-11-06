@@ -131,10 +131,13 @@ class WebhookProcessorService:
 
         event = payload.get("event")
 
+        # Resolve inner data object (WAHA can pass fields either at root or nested in 'payload')
+        inner = payload.get("payload") if isinstance(payload.get("payload"), dict) else payload
+
         # 1. Handle Delivery Receipts (message.ack)
         if event == "message.ack":
-            ack = payload.get("ack")
-            wa_id = str(payload.get("id") or "")
+            ack = inner.get("ack") if inner.get("ack") is not None else payload.get("ack")
+            wa_id = str(inner.get("id") or payload.get("id") or "")
             if not wa_id:
                 return WebhookProcessResult(event_type="message.ack", status="missing_id")
 
@@ -147,13 +150,13 @@ class WebhookProcessorService:
         # 2. Handle Inbound Messages (message)
         if event == "message":
             # Ignore our own reflected messages
-            if payload.get("fromMe") is True:
+            if inner.get("fromMe") is True or payload.get("fromMe") is True:
                 return WebhookProcessResult(event_type="message_echo_ignored", status="ignored")
 
-            from_raw = payload.get("from") or ""
+            from_raw = inner.get("from") or payload.get("from") or ""
             phone = self.extract_phone_digits(from_raw)
-            body = payload.get("body") or ""
-            msg_id = str(payload.get("id") or "")
+            body = inner.get("body") or payload.get("body") or ""
+            msg_id = str(inner.get("id") or payload.get("id") or "")
 
             if not phone or not msg_id:
                 return WebhookProcessResult(event_type="invalid_message", status="missing_fields")

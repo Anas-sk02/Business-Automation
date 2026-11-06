@@ -212,13 +212,20 @@ class AIClient:
             }
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            try:
-                response = await client.post(url, headers=headers, json=body)
-            except httpx.TimeoutException:
-                raise AIProviderError(f"Gemini API request timed out after {self.timeout}s")
-            except httpx.RequestError as exc:
-                safe_msg = str(exc).replace(self.api_key, "[REDACTED]") if self.api_key else str(exc)
-                raise AIProviderError(f"Gemini API network connection error: {safe_msg}") from exc
+            for attempt in range(2):
+                try:
+                    response = await client.post(url, headers=headers, json=body)
+                except httpx.TimeoutException:
+                    raise AIProviderError(f"Gemini API request timed out after {self.timeout}s")
+                except httpx.RequestError as exc:
+                    safe_msg = str(exc).replace(self.api_key, "[REDACTED]") if self.api_key else str(exc)
+                    raise AIProviderError(f"Gemini API network connection error: {safe_msg}") from exc
+
+                if response.status_code == 503 and attempt == 0:
+                    logger.warning("Gemini API returned 503 high demand; retrying once after 2.0s...")
+                    await asyncio.sleep(2.0)
+                    continue
+                break
 
         if response.status_code != 200:
             safe_text = response.text[:500]
