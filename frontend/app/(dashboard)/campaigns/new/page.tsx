@@ -533,7 +533,7 @@ export default function NewCampaignPage() {
       </section>
 
       {/* Sticky Footer Actions per UI-UX.md Section 5.6 & 6.4 */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-card/95 backdrop-blur-xs py-3 px-6 shadow-md">
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-border bg-card py-3 px-6 shadow-md">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <Link href="/campaigns">
             <Button variant="ghost" size="sm" className="h-9 text-xs">

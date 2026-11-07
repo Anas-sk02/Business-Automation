@@ -8,16 +8,18 @@ const hankenGrotesk = Hanken_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
+  fallback: ["Noto Sans Devanagari", "sans-serif"],
 });
 
 const sourceSerif = Source_Serif_4({
   subsets: ["latin"],
   variable: "--font-serif",
   display: "swap",
+  fallback: ["Noto Serif Devanagari", "serif"],
 });
 
 export const metadata: Metadata = {
-  title: "SignalForge AI — Evidence-Driven Outreach Platform",
+  title: "SignalForge — Evidence-Driven Outreach Platform",
   description:
     "Evidence-backed business discovery, website performance audits, and approved WhatsApp outreach automation.",
 };

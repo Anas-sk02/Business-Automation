@@ -15,7 +15,6 @@ import type {
   TaskResponse,
   TaskListResponse,
   TaskStatus,
-  SnoozePreset,
 } from "@/types";
 import { ScoreLedger } from "@/components/lead/ScoreLedger";
 import { AuditReport } from "@/components/audit/AuditReport";
@@ -326,6 +325,7 @@ function LeadDetailContent({
   const leadId = resolvedParams.id;
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
+  const [campaignName, setCampaignName] = useState<string | null>(null);
   const [auditReport, setAuditReport] = useState<FullAuditReport | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -364,16 +364,20 @@ function LeadDetailContent({
     }
   };
 
-  const handleTaskStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+  const handleToggleComplete = async (task: TaskResponse) => {
+    const nextStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
     try {
-      await api.put(`/api/tasks/${taskId}`, { status: newStatus });
+      await api.put(`/api/tasks/${task.id}`, { status: nextStatus });
       await fetchLeadTasks();
     } catch {
       // ignore
     }
   };
 
-  const handleTaskSnooze = async (taskId: string, preset: SnoozePreset) => {
+  const handleTaskSnooze = async (
+    taskId: string,
+    preset: "later_today" | "tomorrow" | "next_week"
+  ) => {
     try {
       await api.put(`/api/tasks/${taskId}`, { snooze_preset: preset });
       await fetchLeadTasks();
@@ -403,6 +407,19 @@ function LeadDetailContent({
       setLoadError(null);
       const res = await api.get<ResponseEnvelope<LeadDetail>>(`/api/leads/${leadId}`);
       setLead(res.data);
+
+      if (res.data?.campaign_id) {
+        try {
+          const campRes = await api.get<ResponseEnvelope<{ name: string }>>(
+            `/api/campaigns/${res.data.campaign_id}`
+          );
+          if (campRes.data?.name) {
+            setCampaignName(campRes.data.name);
+          }
+        } catch {
+          // Keep default fallback
+        }
+      }
 
       // Attempt to load full audit report with 1-hour signed screenshot URLs
       try {
@@ -556,30 +573,30 @@ function LeadDetailContent({
   const safeEmail = lead.email ? encodeURIComponent(lead.email.trim()) : "";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20 lg:pb-0">
       {/* Breadcrumb Navigation */}
-      <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/campaigns" className="hover:text-foreground transition-colors">
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground min-w-0">
+        <Link href="/campaigns" className="hover:text-foreground transition-colors shrink-0">
           Campaigns
         </Link>
-        <span>/</span>
+        <span className="shrink-0">/</span>
         <Link
           href={`/campaigns/${lead.campaign_id}`}
-          className="hover:text-foreground transition-colors"
+          className="hover:text-foreground transition-colors truncate max-w-[100px] sm:max-w-[180px]"
         >
-          Campaign leads
+          {campaignName || "Campaign"}
         </Link>
-        <span>/</span>
-        <span className="text-foreground font-medium truncate max-w-xs">
+        <span className="shrink-0">/</span>
+        <span className="text-foreground font-medium truncate max-w-[120px] sm:max-w-xs">
           {lead.business_name}
         </span>
       </nav>
 
       {/* Header with Business Name, Stage Chip, Sub-line and Primary Action */}
       <div className="flex flex-col gap-4 border-b border-border pb-6 md:flex-row md:items-start md:justify-between">
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+            <h1 className="font-serif text-2xl font-semibold tracking-tight text-foreground md:text-3xl break-words [overflow-wrap:anywhere]">
               {lead.business_name}
             </h1>
             {/* Stage Chip */}
@@ -808,7 +825,7 @@ function LeadDetailContent({
                       <TaskRow
                         key={task.id}
                         task={task}
-                        onStatusChanged={handleTaskStatusChange}
+                        onToggleComplete={handleToggleComplete}
                         onSnooze={handleTaskSnooze}
                       />
                     ))}
@@ -937,6 +954,36 @@ function LeadDetailContent({
           </div>
         </div>
       </div>
+
+      {/* Sticky Bottom Bar on Mobile/Tablet (< 1024px) per UI-UX.md Section 6.6 */}
+      {nextStep.buttonText && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-card p-3 shadow-lg lg:hidden">
+          <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-foreground truncate">{nextStep.title}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{nextStep.description}</p>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="shrink-0 h-9 text-xs"
+              onClick={() => {
+                if (nextStep.tab) {
+                  setActiveTab(nextStep.tab);
+                }
+                if (nextStep.action === "audit") {
+                  handleStartAudit();
+                } else if (nextStep.action === "analysis") {
+                  handleStartAnalysis();
+                }
+              }}
+              disabled={isAuditing || auditStatus === "running" || isRunningAnalysis}
+            >
+              {nextStep.buttonText}
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

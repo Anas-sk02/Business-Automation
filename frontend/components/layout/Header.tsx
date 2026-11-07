@@ -89,8 +89,11 @@ export function Header({ userProfile, onMobileMenuToggle }: HeaderProps) {
               <span className="text-xs font-semibold text-foreground">Notifications</span>
             </div>
             {/* Honest Empty State per UI-UX.md Section 4 */}
-            <div className="py-6 text-center text-xs text-muted-foreground">
-              No notifications.
+            <div className="py-6 px-2 text-center text-xs text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground">No notifications</p>
+              <p className="text-[11px] leading-relaxed">
+                When campaigns finish running or leads reply, you’ll see them here.
+              </p>
             </div>
           </DropdownMenuContent>
         </DropdownMenu>

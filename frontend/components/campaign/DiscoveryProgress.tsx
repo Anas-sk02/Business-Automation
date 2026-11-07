@@ -113,7 +113,7 @@ export function DiscoveryProgress({
   }
 
   return (
-    <Card className="border border-border/70 shadow-sm bg-card/60 backdrop-blur-sm">
+    <Card className="border border-border/70 shadow-sm bg-card">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2.5">

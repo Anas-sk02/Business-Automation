@@ -665,7 +665,7 @@ export function LeadTable({
                           {lead.business_name}
                         </div>
                         <div className="text-[11px] text-muted-foreground truncate">
-                          {lead.address || lead.city || lead.category || "—"}
+                          {lead.address || lead.city || lead.category || "Not listed"}
                         </div>
                       </div>
                     </TableCell>
@@ -683,7 +683,7 @@ export function LeadTable({
                           </span>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-muted-foreground">—</span>
+                        <span className="text-[11px] text-muted-foreground">Not rated</span>
                       )}
                     </TableCell>
 
@@ -705,7 +705,7 @@ export function LeadTable({
                             title="No phone number: cannot be messaged on WhatsApp"
                           >
                             <PhoneOff className="h-3 w-3 text-muted-foreground/60 shrink-0" />
-                            <span>No phone</span>
+                            <span>Not listed</span>
                           </span>
                         )}
 
@@ -729,7 +729,7 @@ export function LeadTable({
                               className="text-muted-foreground/60"
                               title="No website found"
                             >
-                              —
+                              Not listed
                             </span>
                           );
                         })()}
