@@ -63,13 +63,6 @@ export function FindingsList({
               })
             : "Recently";
 
-          // Select appropriate screenshot context based on finding type
-          const screenshotForDrawer =
-            item.finding_title.toLowerCase().includes("mobile") ||
-            item.description.toLowerCase().includes("mobile")
-              ? mobileScreenshotUrl || desktopScreenshotUrl
-              : desktopScreenshotUrl || mobileScreenshotUrl;
-
           return (
             <div
               key={item.id}

@@ -11,7 +11,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -87,10 +86,12 @@ export function PipelineBoard({
   const [lastUndo, setLastUndo] = useState<UndoAction | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Sync if initialData changes externally (e.g. campaign switch)
-  React.useEffect(() => {
+  // Sync if initialData changes externally (e.g. campaign switch) per React prop adjustment pattern
+  const [prevInitialData, setPrevInitialData] = useState(initialData);
+  if (initialData !== prevInitialData) {
+    setPrevInitialData(initialData);
     setBoardData(initialData);
-  }, [initialData]);
+  }
 
   // Helper to find lead in columns or closed rail
   const findLead = (leadId: string): { lead: PipelineLeadCard; sourceStage: string; isClosed: boolean } | null => {

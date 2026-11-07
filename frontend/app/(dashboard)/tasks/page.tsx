@@ -14,11 +14,10 @@ export default function TasksPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await api.get<{ data: TaskListResponse }>("/api/tasks");
       setTasksData(res.data);
+      setError(null);
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : "Failed to load tasks";
       setError(msg);
@@ -48,7 +47,10 @@ export default function TasksPage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={loadTasks}
+          onClick={() => {
+            setLoading(true);
+            loadTasks();
+          }}
           disabled={loading}
           className="text-xs gap-1.5 h-8 font-medium"
         >

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { WhatsAppDraftResponse, MessageStatus } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -57,7 +57,6 @@ export function isIndianQuietHours(date = new Date()): boolean {
 
 export function MessageDraftEditor({
   draft,
-  leadId: _leadId,
   leadName,
   recipientPhone,
   isSuppressed = false,
@@ -79,11 +78,11 @@ export function MessageDraftEditor({
   const [showSendConfirm, setShowSendConfirm] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (draft?.message.message_body) {
-      setEditedBody(draft.message.message_body);
-    }
-  }, [draft?.message.message_body]);
+  const [prevBody, setPrevBody] = useState(draft?.message.message_body || "");
+  if (draft?.message.message_body && draft.message.message_body !== prevBody) {
+    setPrevBody(draft.message.message_body);
+    setEditedBody(draft.message.message_body);
+  }
 
   const hasPhone = Boolean(recipientPhone && recipientPhone.trim());
   const inQuietHours = isIndianQuietHours();

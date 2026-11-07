@@ -16,8 +16,6 @@ export default function PipelinePage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadPipeline = useCallback(async (campaignId?: string) => {
-    setLoading(true);
-    setError(null);
     try {
       // 1. Fetch campaigns for filter dropdown
       const campRes = await api.get<{ data: Campaign[] }>("/api/campaigns");
@@ -30,6 +28,7 @@ export default function PipelinePage() {
         campaignId ? { campaign_id: campaignId } : undefined
       );
       setPipelineData(pipeRes.data);
+      setError(null);
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : "Failed to load pipeline board";
       setError(msg);
@@ -43,6 +42,7 @@ export default function PipelinePage() {
   }, [loadPipeline, selectedCampaignId]);
 
   const handleCampaignChange = (newCampId: string | undefined) => {
+    setLoading(true);
     setSelectedCampaignId(newCampId);
   };
 
@@ -63,7 +63,10 @@ export default function PipelinePage() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => loadPipeline(selectedCampaignId)}
+          onClick={() => {
+            setLoading(true);
+            loadPipeline(selectedCampaignId);
+          }}
           disabled={loading}
           className="text-xs gap-1.5 h-8 font-medium"
         >

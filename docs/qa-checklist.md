@@ -8,18 +8,18 @@ This document tracks verification across all 7 stages of SignalForge AI, mapping
 
 | Route | Page / View | Expected Behavior | Status |
 |---|---|---|---|
-| `/login` | Authentication Login | Form with email and password inputs, submit button, Google OAuth button, link to signup. Redirects authenticated users to `/`. | PENDING |
-| `/signup` | Authentication Signup | Form with name, email, password inputs, submit button, Google OAuth button, link to login. Validates password length (8+ chars). | PENDING |
-| `/` | Today Action Center (Dashboard) | Summary cards (Total Campaigns, Active Leads, Messages Sent, Open Tasks), Next Actions work queue, Recent Activity feed, quick-create buttons. | PENDING |
-| `/campaigns` | Campaigns List | Table of campaigns with status chips, search input, status filter, sorting, pagination, "Create Campaign" button, row navigation to detail. | PENDING |
-| `/campaigns/new` | Multi-Step Campaign Wizard | 4-step wizard (Basics, Target Audience, Outreach Settings, Review & Launch), industry template selector, budget & throttle controls, sticky footer. | PENDING |
-| `/campaigns/[id]` | Campaign Detail & Management | Campaign header with status, metrics bar, pause/resume control, "Run Discovery" trigger, LeadTable with filters/sorting/search/pagination, danger zone delete. | PENDING |
-| `/leads/[id]` | Lead 360° Detail View | Breadcrumb navigation, business header with stage chip and fit score, tabs for Website Audit, AI Analysis, WhatsApp Outreach, and Tasks. | PENDING |
-| `/pipeline` | Kanban Sales Pipeline | 9 working stage columns, collapsible 4-stage closed rail, drag-and-drop between manual stages, card "Move to" menu, undo toast, deal note dialog. | PENDING |
-| `/tasks` | Task Management Queue | Tasks grouped into Overdue, Today, Upcoming, and Completed (collapsed), priority filters, completion checkbox, snooze preset dropdown. | PENDING |
-| `/templates` | Outreach Templates | Table of WhatsApp outreach templates with approval statuses (Approved, Pending, Rejected, Draft), purpose tags, variable previews. | PENDING |
-| `/analytics` | Performance & Cost Analytics | Funnel conversion bar chart, API & messaging cost tables in INR, delivery & reply metrics, date range selector. | PENDING |
-| `/settings` | Account & Compliance Settings | Profile form (name, company, WhatsApp business number), read-only suppression list table with search and pagination. | PENDING |
+| `/login` | Authentication Login | Form with email and password inputs, submit button, Google OAuth button, link to signup. Redirects authenticated users to `/`. | PASS |
+| `/signup` | Authentication Signup | Form with name, email, password inputs, submit button, Google OAuth button, link to login. Validates password length (8+ chars). | PASS |
+| `/` | Today Action Center (Dashboard) | Summary cards (Total Campaigns, Active Leads, Messages Sent, Open Tasks), Next Actions work queue, Recent Activity feed, quick-create buttons. | PASS |
+| `/campaigns` | Campaigns List | Table of campaigns with status chips, search input, status filter, sorting, pagination, "Create Campaign" button, row navigation to detail. | PASS |
+| `/campaigns/new` | Multi-Step Campaign Wizard | 4-step wizard (Basics, Target Audience, Outreach Settings, Review & Launch), industry template selector, budget & throttle controls, sticky footer. | PASS |
+| `/campaigns/[id]` | Campaign Detail & Management | Campaign header with status, metrics bar, pause/resume control, "Run Discovery" trigger, LeadTable with filters/sorting/search/pagination, danger zone delete. | PASS |
+| `/leads/[id]` | Lead 360° Detail View | Breadcrumb navigation, business header with stage chip and fit score, tabs for Website Audit, AI Analysis, WhatsApp Outreach, and Tasks. | PASS |
+| `/pipeline` | Kanban Sales Pipeline | 9 working stage columns, collapsible 4-stage closed rail, drag-and-drop between manual stages, card "Move to" menu, undo toast, deal note dialog. | PASS |
+| `/tasks` | Task Management Queue | Tasks grouped into Overdue, Today, Upcoming, and Completed (collapsed), priority filters, completion checkbox, snooze preset dropdown. | PASS |
+| `/templates` | Outreach Templates | Table of WhatsApp outreach templates with approval statuses (Approved, Pending, Rejected, Draft), purpose tags, variable previews. | PASS |
+| `/analytics` | Performance & Cost Analytics | Funnel conversion bar chart, API & messaging cost tables in INR, delivery & reply metrics, date range selector. | PASS |
+| `/settings` | Account & Compliance Settings | Profile form (name, company, WhatsApp business number), read-only suppression list table with search and pagination. | PASS |
 
 ---
 
@@ -135,27 +135,27 @@ This document tracks verification across all 7 stages of SignalForge AI, mapping
 ### H. Pipeline Board (`/pipeline`)
 | Component | Element | Type | Expected Behavior | Status |
 |---|---|---|---|---|
-| `PipelineBoard` | Campaign Filter Dropdown | Select | Filters Kanban leads by campaign or "All Campaigns" | PENDING |
-| `PipelineBoard` | Active Leads Counter | Badge | Displays total active leads in board columns | PENDING |
-| `PipelineBoard` | Closed Rail Toggle | Button | Expands/collapses the 4 closed stages (`Not interested`, `No response`, `Closed lost`, `Opted out`) | PENDING |
-| `PipelineBoard` | Drag and Drop Cards | DnD | Cards draggable into manual stages (`Meeting scheduled`, `Proposal sent`, `Negotiation`, `Won`, `Closed lost`, `Not interested`) | PENDING |
-| `PipelineBoard` | Card Move-To Menu | Dropdown | Keyboard/touch accessible dropdown on card (`⋮`) to move stage without dragging | PENDING |
-| `PipelineBoard` | Automated Stage Lock | Tooltip | Hovering locked column header shows tooltip: "Moves automatically when a message is sent." | PENDING |
-| `PipelineBoard` | Opted-Out Card Lock | Icon / State | Opted-out leads cannot be moved; shows shield alert | PENDING |
-| `PipelineBoard` | Deal Note Modal | Dialog | Prompts for optional note when moving to `Won` or `Closed lost` | PENDING |
-| `PipelineBoard` | Undo Toast | Toast | Appears after every move with an "Undo" action button to revert transition | PENDING |
+| `PipelineBoard` | Campaign Filter Dropdown | Select | Filters Kanban leads by campaign or "All Campaigns" | PASS |
+| `PipelineBoard` | Active Leads Counter | Badge | Displays total active leads in board columns | PASS |
+| `PipelineBoard` | Closed Rail Toggle | Button | Expands/collapses the 4 closed stages (`Not interested`, `No response`, `Closed lost`, `Opted out`) | PASS |
+| `PipelineBoard` | Drag and Drop Cards | DnD | Cards draggable into manual stages (`Meeting scheduled`, `Proposal sent`, `Negotiation`, `Won`, `Closed lost`, `Not interested`) | PASS |
+| `PipelineBoard` | Card Move-To Menu | Dropdown | Keyboard/touch accessible dropdown on card (`⋮`) to move stage without dragging | PASS |
+| `PipelineBoard` | Automated Stage Lock | Tooltip | Hovering locked column header shows tooltip: "Moves automatically when a message is sent." | PASS |
+| `PipelineBoard` | Opted-Out Card Lock | Icon / State | Opted-out leads cannot be moved; shows shield alert | PASS |
+| `PipelineBoard` | Deal Note Modal | Dialog | Prompts for optional note when moving to `Won` or `Closed lost` | PASS |
+| `PipelineBoard` | Undo Toast | Toast | Appears after every move with an "Undo" action button to revert transition | PASS |
 
 ### I. Tasks Management (`/tasks`)
 | Component | Element | Type | Expected Behavior | Status |
 |---|---|---|---|---|
-| `TaskList` | Priority Filter Tabs | Buttons | Filters by `all`, `urgent`, `high`, `medium`, `low` | PENDING |
-| `TaskList` | Overdue Group | Section | Lists open tasks with due dates in the past with red indicator | PENDING |
-| `TaskList` | Today Group | Section | Lists tasks due today in IST | PENDING |
-| `TaskList` | Upcoming Group | Section | Lists future tasks and snoozed tasks | PENDING |
-| `TaskList` | Completed Accordion | Accordion | Collapsed by default; toggles display of finished tasks | PENDING |
-| `TaskRow` | Completion Checkbox | Checkbox | Toggles task between `completed` and `pending`, updates counters | PENDING |
-| `TaskRow` | Lead Name Link | Link | Navigates directly to `/leads/{lead_id}` | PENDING |
-| `TaskRow` | Snooze Menu | Dropdown | Allows snoozing: `Later today (+4h)`, `Tomorrow (9:00 AM)`, `Next week (+7d)` | PENDING |
+| `TaskList` | Priority Filter Tabs | Buttons | Filters by `all`, `urgent`, `high`, `medium`, `low` | PASS |
+| `TaskList` | Overdue Group | Section | Lists open tasks with due dates in the past with red indicator | PASS |
+| `TaskList` | Today Group | Section | Lists tasks due today in IST | PASS |
+| `TaskList` | Upcoming Group | Section | Lists future tasks and snoozed tasks | PASS |
+| `TaskList` | Completed Accordion | Accordion | Collapsed by default; toggles display of finished tasks | PASS |
+| `TaskRow` | Completion Checkbox | Checkbox | Toggles task between `completed` and `pending`, updates counters | PASS |
+| `TaskRow` | Lead Name Link | Link | Navigates directly to `/leads/{lead_id}` | PASS |
+| `TaskRow` | Snooze Menu | Dropdown | Allows snoozing: `Later today (+4h)`, `Tomorrow (9:00 AM)`, `Next week (+7d)` | PASS |
 
 ### J. Settings & Suppression (`/settings`)
 | Component | Element | Type | Expected Behavior | Status |
@@ -253,3 +253,4 @@ This document tracks verification across all 7 stages of SignalForge AI, mapping
 | **Color Contrast** | Dark Mode (`#0F161D`) | All text/background combinations meet WCAG AA (>= 4.5:1) | PENDING |
 | **Keyboard Access** | Entire Interface | All interactive controls reachable via Tab, focused with 2px ring | PENDING |
 | **Banned List Check**| Interface | Zero emoji, zero glassmorphism/blur, zero gradients, zero sparkles | PENDING |
+
