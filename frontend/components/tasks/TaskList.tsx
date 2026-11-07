@@ -78,7 +78,7 @@ export function TaskList({ tasks, onTasksChanged }: TaskListProps) {
     setErrorMessage(null);
 
     try {
-      await api.put(`/tasks/${task.id}`, { status: nextStatus });
+      await api.put(`/api/tasks/${task.id}`, { status: nextStatus });
       onTasksChanged();
     } catch (err) {
       const msg = err instanceof ApiClientError ? err.message : "Failed to update task";
@@ -97,7 +97,7 @@ export function TaskList({ tasks, onTasksChanged }: TaskListProps) {
     setErrorMessage(null);
 
     try {
-      await api.put(`/tasks/${taskId}`, {
+      await api.put(`/api/tasks/${taskId}`, {
         status: "snoozed",
         snooze_preset: preset,
       });

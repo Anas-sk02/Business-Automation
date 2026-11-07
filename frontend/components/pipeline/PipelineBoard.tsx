@@ -223,7 +223,7 @@ export function PipelineBoard({
     });
 
     try {
-      await api.put(`/leads/${leadId}/stage`, {
+      await api.put(`/api/leads/${leadId}/stage`, {
         stage: targetStage,
         notes: noteText !== undefined && noteText.trim() !== "" ? noteText.trim() : undefined,
       });

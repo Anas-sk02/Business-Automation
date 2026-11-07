@@ -35,7 +35,10 @@ export async function apiClient<T>(
   if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
     url = new URL(endpoint);
   } else {
-    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    let cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    if (!cleanEndpoint.startsWith("/api") && !cleanEndpoint.startsWith("/health")) {
+      cleanEndpoint = `/api${cleanEndpoint}`;
+    }
     url = new URL(`${API_BASE_URL}${cleanEndpoint}`);
   }
 

@@ -20,13 +20,13 @@ export default function PipelinePage() {
     setError(null);
     try {
       // 1. Fetch campaigns for filter dropdown
-      const campRes = await api.get<{ data: Campaign[] }>("/campaigns");
+      const campRes = await api.get<{ data: Campaign[] }>("/api/campaigns");
       const campList = (campRes.data || []).map((c) => ({ id: c.id, name: c.name }));
       setCampaigns(campList);
 
       // 2. Fetch pipeline Kanban data
       const pipeRes = await api.get<{ data: PipelineBoardResponse }>(
-        "/pipeline",
+        "/api/pipeline",
         campaignId ? { campaign_id: campaignId } : undefined
       );
       setPipelineData(pipeRes.data);

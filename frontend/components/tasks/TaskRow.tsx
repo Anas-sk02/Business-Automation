@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -189,28 +190,30 @@ export function TaskRow({
               <MoreVertical className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-40 text-xs">
-              <DropdownMenuLabel className="text-xs font-semibold">
-                Snooze task
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => onSnooze(task.id, "later_today")}
-                className="cursor-pointer text-xs"
-              >
-                Later today (+4h)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onSnooze(task.id, "tomorrow")}
-                className="cursor-pointer text-xs"
-              >
-                Tomorrow (9:00 AM)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onSnooze(task.id, "next_week")}
-                className="cursor-pointer text-xs"
-              >
-                Next week (+7d)
-              </DropdownMenuItem>
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs font-semibold">
+                  Snooze task
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onSnooze(task.id, "later_today")}
+                  className="cursor-pointer text-xs"
+                >
+                  Later today (+4h)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onSnooze(task.id, "tomorrow")}
+                  className="cursor-pointer text-xs"
+                >
+                  Tomorrow (9:00 AM)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onSnooze(task.id, "next_week")}
+                  className="cursor-pointer text-xs"
+                >
+                  Next week (+7d)
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}

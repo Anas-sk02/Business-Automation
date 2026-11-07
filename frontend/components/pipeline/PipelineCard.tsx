@@ -14,6 +14,7 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -105,24 +106,26 @@ export function PipelineCard({
               <MoreVertical className="h-3.5 w-3.5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 text-xs">
-              <DropdownMenuLabel className="text-xs font-semibold">
-                Move to stage
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ALLOWED_MANUAL_STAGES.map((targetStage) => {
-                const isCurrent = lead.pipeline_stage === targetStage;
-                return (
-                  <DropdownMenuItem
-                    key={targetStage}
-                    disabled={isCurrent}
-                    onClick={() => onMoveToStage(lead.id, targetStage)}
-                    className="cursor-pointer text-xs flex items-center justify-between"
-                  >
-                    <span>{STAGE_LABELS[targetStage]}</span>
-                    {isCurrent && <CheckCircle2 className="h-3 w-3 text-primary" />}
-                  </DropdownMenuItem>
-                );
-              })}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel className="text-xs font-semibold">
+                  Move to stage
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {ALLOWED_MANUAL_STAGES.map((targetStage) => {
+                  const isCurrent = lead.pipeline_stage === targetStage;
+                  return (
+                    <DropdownMenuItem
+                      key={targetStage}
+                      disabled={isCurrent}
+                      onClick={() => onMoveToStage(lead.id, targetStage)}
+                      className="cursor-pointer text-xs flex items-center justify-between"
+                    >
+                      <span>{STAGE_LABELS[targetStage]}</span>
+                      {isCurrent && <CheckCircle2 className="h-3 w-3 text-primary" />}
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
