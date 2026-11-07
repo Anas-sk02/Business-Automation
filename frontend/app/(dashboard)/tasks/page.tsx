@@ -27,8 +27,30 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => {
-    loadTasks();
-  }, [loadTasks]);
+    let ignore = false;
+    async function init() {
+      try {
+        const res = await api.get<{ data: TaskListResponse }>("/api/tasks");
+        if (!ignore) {
+          setTasksData(res.data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!ignore) {
+          const msg = err instanceof ApiClientError ? err.message : "Failed to load tasks";
+          setError(msg);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   return (
     <div className="flex flex-col flex-1 p-6 max-w-5xl mx-auto w-full space-y-6">

@@ -38,8 +38,39 @@ export default function PipelinePage() {
   }, []);
 
   useEffect(() => {
-    loadPipeline(selectedCampaignId);
-  }, [loadPipeline, selectedCampaignId]);
+    let ignore = false;
+    async function init() {
+      try {
+        const campRes = await api.get<{ data: Campaign[] }>("/api/campaigns");
+        if (!ignore) {
+          const campList = (campRes.data || []).map((c) => ({ id: c.id, name: c.name }));
+          setCampaigns(campList);
+        }
+
+        const pipeRes = await api.get<{ data: PipelineBoardResponse }>(
+          "/api/pipeline",
+          selectedCampaignId ? { campaign_id: selectedCampaignId } : undefined
+        );
+        if (!ignore) {
+          setPipelineData(pipeRes.data);
+          setError(null);
+        }
+      } catch (err) {
+        if (!ignore) {
+          const msg = err instanceof ApiClientError ? err.message : "Failed to load pipeline board";
+          setError(msg);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedCampaignId]);
 
   const handleCampaignChange = (newCampId: string | undefined) => {
     setLoading(true);

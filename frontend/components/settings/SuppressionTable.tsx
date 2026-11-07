@@ -81,8 +81,41 @@ export function SuppressionTable() {
   }, [page, pageSize, activeSearch]);
 
   useEffect(() => {
-    fetchSuppressionList();
-  }, [fetchSuppressionList]);
+    let ignore = false;
+    async function init() {
+      const queryParams = new URLSearchParams();
+      queryParams.set("page", page.toString());
+      queryParams.set("page_size", pageSize.toString());
+      if (activeSearch.trim()) {
+        queryParams.set("search", activeSearch.trim());
+      }
+
+      try {
+        const res = await api.get<{ data: SuppressionListResponse }>(
+          `/api/settings/suppression-list?${queryParams.toString()}`
+        );
+        if (!ignore && res?.data) {
+          setRecords(Array.isArray(res.data.suppressed_contacts) ? res.data.suppressed_contacts : []);
+          setTotal(typeof res.data.total === "number" ? res.data.total : 0);
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const msg = err instanceof Error ? err.message : "Failed to load suppression list";
+          setError(msg);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [page, pageSize, activeSearch]);
 
   // Handle Search Submission
   function handleSearchSubmit(e: React.FormEvent) {

@@ -334,8 +334,86 @@ export function LeadTable({
 
   // Re-fetch on dependencies change or parent trigger
   useEffect(() => {
-    fetchLeads();
-  }, [fetchLeads, refreshTrigger]);
+    let ignore = false;
+    async function load() {
+      if (!campaignId) return;
+
+      const params: Record<string, string | number | boolean | undefined> = {
+        page,
+        page_size: pageSize,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      };
+
+      if (activeSearch) {
+        params.search = activeSearch;
+      }
+      if (stageFilter !== "all") {
+        params.stage = stageFilter;
+      }
+      if (websiteFilter === "has_website") {
+        params.has_website = true;
+      } else if (websiteFilter === "no_website") {
+        params.has_website = false;
+      }
+      if (phoneFilter === "has_phone") {
+        params.has_phone = true;
+      } else if (phoneFilter === "no_phone") {
+        params.has_phone = false;
+      }
+      if (scoreFilter === "qualified") {
+        params.min_score = 60;
+      } else if (scoreFilter === "under_60") {
+        params.max_score = 59;
+      }
+
+      try {
+        const response = await api.get<PaginatedEnvelope<Lead>>(
+          `/api/campaigns/${campaignId}/leads`,
+          params
+        );
+        if (ignore) return;
+        if (response && Array.isArray(response.data)) {
+          setLeads(response.data);
+          setTotalCount(response.total ?? response.data.length);
+          setError(null);
+        } else {
+          setLeads([]);
+          setTotalCount(0);
+        }
+      } catch (err: unknown) {
+        if (ignore) return;
+        const msg =
+          err instanceof ApiClientError
+            ? err.message
+            : err instanceof Error
+            ? err.message
+            : "Failed to load leads.";
+        setError(msg);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [
+    campaignId,
+    page,
+    pageSize,
+    sortBy,
+    sortOrder,
+    activeSearch,
+    stageFilter,
+    websiteFilter,
+    phoneFilter,
+    scoreFilter,
+    refreshTrigger,
+  ]);
 
   // Handle column header sort toggles
   const handleSort = (field: SortField) => {

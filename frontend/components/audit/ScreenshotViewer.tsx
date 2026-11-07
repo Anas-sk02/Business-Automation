@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import {
   Dialog,
   DialogContent,
@@ -104,11 +105,13 @@ export function ScreenshotViewer({
               }
               className="group relative block w-full aspect-video bg-muted/20 overflow-hidden text-left cursor-zoom-in"
             >
-              <img
+              <Image
                 src={safeDesktopUrl}
                 alt="Desktop website screenshot"
+                width={1280}
+                height={720}
+                unoptimized
                 className="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-[1.02]"
-                loading="lazy"
               />
               <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 flex items-center justify-center">
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity rounded bg-card/90 px-2 py-1 text-[11px] font-medium text-foreground shadow-sm flex items-center gap-1">
@@ -141,11 +144,13 @@ export function ScreenshotViewer({
               }
               className="group relative block w-full aspect-video bg-muted/20 overflow-hidden text-left cursor-zoom-in"
             >
-              <img
+              <Image
                 src={safeMobileUrl}
                 alt="Mobile website screenshot"
+                width={375}
+                height={667}
+                unoptimized
                 className="w-full h-full object-cover object-top transition-transform duration-200 group-hover:scale-[1.02]"
-                loading="lazy"
               />
               <div className="absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 flex items-center justify-center">
                 <span className="opacity-0 group-hover:opacity-100 transition-opacity rounded bg-card/90 px-2 py-1 text-[11px] font-medium text-foreground shadow-sm flex items-center gap-1">
@@ -175,9 +180,12 @@ export function ScreenshotViewer({
               </DialogDescription>
             </DialogHeader>
             <div className="mt-3 flex-1 overflow-auto rounded border border-border bg-muted/10 p-2">
-              <img
+              <Image
                 src={enlarged.url}
                 alt={`${enlarged.label} enlarged view`}
+                width={1280}
+                height={800}
+                unoptimized
                 className="w-full h-auto object-contain mx-auto"
               />
             </div>

@@ -106,8 +106,50 @@ export default function AnalyticsPage() {
   }, [selectedCampaignId, getDateRangeParams]);
 
   useEffect(() => {
-    fetchAnalytics();
-  }, [fetchAnalytics]);
+    let ignore = false;
+    async function load() {
+      const { from_date, to_date } = getDateRangeParams();
+      const queryParams = new URLSearchParams();
+      if (from_date) queryParams.set("from_date", from_date);
+      if (to_date) queryParams.set("to_date", to_date);
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : "";
+
+      try {
+        if (selectedCampaignId === "all") {
+          const res = await api.get<{ data: AnalyticsOverviewResponse }>(
+            `/api/analytics/overview${queryString}`
+          );
+          if (!ignore) {
+            setAnalyticsData(res?.data ?? null);
+            setError(null);
+          }
+        } else {
+          const safeCampaignId = encodeURIComponent(selectedCampaignId);
+          const res = await api.get<{ data: CampaignAnalyticsResponse }>(
+            `/api/analytics/campaign/${safeCampaignId}${queryString}`
+          );
+          if (!ignore) {
+            setAnalyticsData(res?.data ?? null);
+            setError(null);
+          }
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const message = err instanceof Error ? err.message : "Failed to load analytics";
+          setError(message);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [selectedCampaignId, getDateRangeParams]);
 
   const kpis = analyticsData?.kpis;
   const hasSentMessages = analyticsData?.has_sent_messages ?? false;

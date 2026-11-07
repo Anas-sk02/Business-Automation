@@ -186,16 +186,49 @@ export function WhatsAppChat({
     }
   }, [leadId]);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    await Promise.all([fetchMessages(), fetchDraft()]);
-    setIsLoading(false);
-  }, [fetchMessages, fetchDraft]);
-
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let ignore = false;
+    async function init() {
+      try {
+        const [msgRes, draftRes] = await Promise.allSettled([
+          api.get<{ data: WhatsAppMessage[] }>(`/api/leads/${leadId}/whatsapp/messages`),
+          api.get<{ data: WhatsAppDraftResponse }>(`/api/leads/${leadId}/whatsapp/draft`),
+        ]);
+
+        if (ignore) return;
+
+        if (msgRes.status === "fulfilled" && msgRes.value?.data) {
+          setMessages(msgRes.value.data);
+        } else {
+          setMessages([]);
+        }
+
+        if (draftRes.status === "fulfilled" && draftRes.value?.data) {
+          setDraft(draftRes.value.data);
+        } else {
+          setDraft(null);
+        }
+        setError(null);
+      } catch (err: unknown) {
+        if (!ignore) {
+          if (err instanceof ApiClientError) {
+            setError(err.message);
+          } else {
+            setError("Failed to load WhatsApp conversation.");
+          }
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    init();
+    return () => {
+      ignore = true;
+    };
+  }, [leadId]);
 
   useEffect(() => {
     if (!isLoading && messages.length > 0) {

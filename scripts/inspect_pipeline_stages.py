@@ -29,3 +29,4 @@ for k, v in data["closed"].items():
         print(f"  {k} ({len(v)}):")
         for card in v:
             print(f"    - {card['id']}: {card['business_name']} (stage: {card['pipeline_stage']})")
+

@@ -46,7 +46,34 @@ export function ProfileSettings() {
   }
 
   useEffect(() => {
-    loadProfile();
+    let ignore = false;
+    async function init() {
+      try {
+        const res = await api.get<{ data: UserProfile }>("/api/auth/me");
+        if (!ignore && res?.data) {
+          setProfile(res.data);
+          setFullName(res.data.full_name || "");
+          setCompanyName(res.data.company_name || "");
+          setWhatsappNumber(res.data.whatsapp_number || "");
+          setServiceDescriptions(Array.isArray(res.data.service_descriptions) ? res.data.service_descriptions : []);
+          setTimezone(res.data.timezone || "Asia/Kolkata");
+          setError(null);
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          const msg = err instanceof Error ? err.message : "Failed to load profile details";
+          setError(msg);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   function handleAddService(e?: React.FormEvent) {

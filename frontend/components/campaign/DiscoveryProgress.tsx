@@ -76,8 +76,11 @@ export function DiscoveryProgress({
     }
 
     isPollingRef.current = true;
-    // Initial fetch immediately
-    fetchStatus();
+    const initialTimer = setTimeout(() => {
+      if (isPollingRef.current) {
+        fetchStatus();
+      }
+    }, 0);
 
     const intervalId = setInterval(() => {
       if (isPollingRef.current) {
@@ -87,6 +90,7 @@ export function DiscoveryProgress({
 
     return () => {
       isPollingRef.current = false;
+      clearTimeout(initialTimer);
       clearInterval(intervalId);
     };
   }, [statusData.status, fetchStatus]);

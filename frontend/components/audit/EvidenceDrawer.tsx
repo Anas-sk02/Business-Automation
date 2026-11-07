@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import {
   Sheet,
   SheetContent,
@@ -255,11 +256,13 @@ export function EvidenceDrawer({
               Visual context
             </h4>
             <div className="rounded border border-border bg-card overflow-hidden">
-              <img
+              <Image
                 src={safeScreenshotUrl}
                 alt={`Screenshot for ${evidence.finding_title}`}
+                width={800}
+                height={500}
+                unoptimized
                 className="w-full h-auto object-cover max-h-64 object-top"
-                loading="lazy"
               />
             </div>
           </div>

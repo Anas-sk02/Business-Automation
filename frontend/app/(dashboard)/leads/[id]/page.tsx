@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, use, Suspense } from "react";
+import { useEffect, useState, useCallback, use, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ApiClientError } from "@/lib/api";
@@ -349,7 +349,7 @@ function LeadDetailContent({
   const [tasksLoading, setTasksLoading] = useState(false);
   const [tasksError, setTasksError] = useState<string | null>(null);
 
-  const fetchLeadTasks = async () => {
+  const fetchLeadTasks = useCallback(async () => {
     try {
       setTasksLoading(true);
       setTasksError(null);
@@ -362,7 +362,7 @@ function LeadDetailContent({
     } finally {
       setTasksLoading(false);
     }
-  };
+  }, [leadId]);
 
   const handleToggleComplete = async (task: TaskResponse) => {
     const nextStatus: TaskStatus = task.status === "completed" ? "pending" : "completed";
@@ -386,7 +386,7 @@ function LeadDetailContent({
     }
   };
 
-  const fetchAnalysis = async () => {
+  const fetchAnalysis = useCallback(async () => {
     try {
       setIsLoadingAnalysis(true);
       setAnalysisError(null);
@@ -399,9 +399,9 @@ function LeadDetailContent({
     } finally {
       setIsLoadingAnalysis(false);
     }
-  };
+  }, [leadId]);
 
-  const fetchLead = async () => {
+  const fetchLead = useCallback(async () => {
     try {
       setIsLoading(true);
       setLoadError(null);
@@ -442,11 +442,83 @@ function LeadDetailContent({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [leadId, fetchAnalysis]);
 
   useEffect(() => {
-    fetchLead();
-    fetchLeadTasks();
+    let ignore = false;
+    async function init() {
+      try {
+        const res = await api.get<ResponseEnvelope<LeadDetail>>(`/api/leads/${leadId}`);
+        if (!ignore) {
+          setLead(res.data);
+        }
+
+        if (res.data?.campaign_id) {
+          try {
+            const campRes = await api.get<ResponseEnvelope<{ name: string }>>(
+              `/api/campaigns/${res.data.campaign_id}`
+            );
+            if (!ignore && campRes.data?.name) {
+              setCampaignName(campRes.data.name);
+            }
+          } catch {
+            // Keep default fallback
+          }
+        }
+
+        try {
+          const auditRes = await api.get<ResponseEnvelope<FullAuditReport>>(
+            `/api/leads/${leadId}/audit`
+          );
+          if (!ignore) {
+            setAuditReport(auditRes.data);
+          }
+        } catch {
+          if (!ignore) {
+            setAuditReport(null);
+          }
+        }
+
+        try {
+          const anRes = await api.get<ResponseEnvelope<AIAnalysisType | null>>(
+            `/api/leads/${leadId}/analysis`
+          );
+          if (!ignore) {
+            setAnalysis(anRes.data);
+          }
+        } catch {
+          if (!ignore) {
+            setAnalysis(null);
+          }
+        }
+
+        try {
+          const tRes = await api.get<{ data: TaskListResponse }>(`/api/tasks?lead_id=${leadId}`);
+          if (!ignore && tRes?.data?.tasks) {
+            setLeadTasks(tRes.data.tasks);
+          }
+        } catch {
+          // ignore
+        }
+      } catch (err: unknown) {
+        if (!ignore) {
+          if (err instanceof ApiClientError) {
+            setLoadError(err.message);
+          } else {
+            setLoadError("Failed to load lead details. Please try again.");
+          }
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    init();
+    return () => {
+      ignore = true;
+    };
   }, [leadId]);
 
   const handleStartAudit = async () => {
