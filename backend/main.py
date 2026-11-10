@@ -176,6 +176,7 @@ from backend.routers.pipeline import router as pipeline_router
 from backend.routers.tasks import router as tasks_router
 from backend.routers.analytics import router as analytics_router
 from backend.routers.settings import router as settings_router
+from backend.routers.notifications import router as notifications_router
 
 app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
 app.include_router(campaigns_router, prefix="/api/campaigns", tags=["Campaigns"])
@@ -185,6 +186,7 @@ app.include_router(pipeline_router, prefix="/api", tags=["Pipeline"])
 app.include_router(tasks_router, prefix="/api", tags=["Tasks"])
 app.include_router(analytics_router, prefix="/api", tags=["Analytics"])
 app.include_router(settings_router, prefix="/api", tags=["Settings"])
+app.include_router(notifications_router, prefix="/api", tags=["Notifications"])
 
 
 

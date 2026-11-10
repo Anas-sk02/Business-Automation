@@ -26,6 +26,7 @@ from backend.models.whatsapp import (
 from backend.prompts.reply_classification import build_reply_classification_prompt
 from backend.services.ai_client import AIClient, AIClientError
 from backend.services.discovery import DiscoveryService
+from backend.routers.notifications import create_notification
 
 logger = logging.getLogger("signalforge.webhook_processor")
 
@@ -414,6 +415,16 @@ class WebhookProcessorService:
                     "status": "pending",
                 }).execute()
                 tasks_created += 1
+                create_notification(
+                    db=self._db,
+                    user_id=user_id,
+                    title=f"Ambiguous reply from {lead.get('business_name') or 'lead'}",
+                    message=f"Reply: '{clean_body[:100]}'",
+                    notification_type="action_required",
+                    link_url=f"/leads/{lead_id}?tab=whatsapp",
+                    lead_id=lead_id,
+                    campaign_id=campaign_id,
+                )
 
         # High confidence positive response
         elif classification in (
@@ -450,6 +461,16 @@ class WebhookProcessorService:
                     "status": "pending",
                 }).execute()
                 tasks_created += 1
+                create_notification(
+                    db=self._db,
+                    user_id=user_id,
+                    title=f"Interested lead: {biz}",
+                    message=f"'{clean_body[:100]}'",
+                    notification_type="action_required",
+                    link_url=f"/leads/{lead_id}?tab=whatsapp",
+                    lead_id=lead_id,
+                    campaign_id=campaign_id,
+                )
 
         # Wants info or Not now
         elif classification in (ReplyClassification.WANTS_INFO, ReplyClassification.NOT_NOW):
@@ -478,6 +499,16 @@ class WebhookProcessorService:
                     "status": "pending",
                 }).execute()
                 tasks_created += 1
+                create_notification(
+                    db=self._db,
+                    user_id=user_id,
+                    title=f"Inquiry reply from {biz}",
+                    message=f"'{clean_body[:100]}'",
+                    notification_type="info",
+                    link_url=f"/leads/{lead_id}?tab=whatsapp",
+                    lead_id=lead_id,
+                    campaign_id=campaign_id,
+                )
 
         # Not interested
         elif classification == ReplyClassification.NOT_INTERESTED:

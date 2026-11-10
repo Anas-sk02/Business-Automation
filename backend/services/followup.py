@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from backend.database import get_supabase_client
 from backend.services.ai_client import AIClient
 from backend.services.message_generator import MessageGeneratorService
+from backend.routers.notifications import create_notification
 
 logger = logging.getLogger("signalforge.followup")
 
@@ -387,6 +388,18 @@ class FollowupService:
                     "due_date": now_iso,
                 }
                 self._db.table("tasks").insert(task_payload).execute()
+
+                if user_id:
+                    create_notification(
+                        db=self._db,
+                        user_id=user_id,
+                        title=f"Follow-up #{attempt_number} due for {biz_name}",
+                        message=f"48 hours quiet without reply. Follow-up draft ready for approval.",
+                        notification_type="warning",
+                        link_url=f"/leads/{lead_id}?tab=whatsapp",
+                        lead_id=lead_id,
+                        campaign_id=campaign_id,
+                    )
 
                 # 9. Update next_followup_at to next pending schedule if available
                 next_sched_res = (

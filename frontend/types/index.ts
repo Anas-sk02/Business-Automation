@@ -685,6 +685,35 @@ export interface SuppressionListResponse {
   page_size: number;
 }
 
+// Notification Types
+export type NotificationType =
+  | "info"
+  | "success"
+  | "warning"
+  | "error"
+  | "action_required";
+
+export interface AppNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  link_url?: string | null;
+  lead_id?: string | null;
+  campaign_id?: string | null;
+  is_read: boolean;
+  created_at: string;
+  read_at?: string | null;
+}
+
+export interface NotificationListResponse {
+  notifications: AppNotification[];
+  unread_count: number;
+  total: number;
+}
+
+
 
 
 
