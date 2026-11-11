@@ -303,6 +303,18 @@ def test_protected_routes_require_jwt(unauth_client):
     res4 = unauth_client.get(f"/api/leads/{VALID_LEAD_ID}/whatsapp/messages")
     assert res4.status_code == 401
 
+    res5 = unauth_client.get("/api/whatsapp/session/status")
+    assert res5.status_code == 401
+
+    res6 = unauth_client.post("/api/whatsapp/session/start")
+    assert res6.status_code == 401
+
+    res7 = unauth_client.get("/api/whatsapp/session/qr")
+    assert res7.status_code == 401
+
+    res8 = unauth_client.post("/api/whatsapp/session/logout")
+    assert res8.status_code == 401
+
 
 # ============================================================================
 # 5. Public Webhooks

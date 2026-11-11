@@ -401,3 +401,60 @@ async def test_send_message_empty_inputs_rejected(base_db, mock_waha_http):
     base_db.messages_data[0]["message_body"] = "   "
     with pytest.raises(ValueError, match="empty message body"):
         await service.send_message("msg_001", "user_xyz", ignore_quiet_hours=True)
+
+
+# ============================================================================
+# Multi-Tenant WhatsApp Session Isolation & Security Tests
+# ============================================================================
+
+def test_get_user_session_name_deterministic_and_sanitized():
+    """Verify session names are deterministic, safe, and reject invalid user IDs."""
+    # Valid UUIDs
+    name1 = WhatsAppService.get_user_session_name("550e8400-e29b-41d4-a716-446655440000")
+    assert name1 == "user_550e8400_e29b_41d4_a716_446655440000"
+
+    # Alphanumeric with special characters stripped
+    name2 = WhatsAppService.get_user_session_name("user@org#123")
+    assert name2 == "user_userorg123"
+
+    # Rejection of empty, None, or blank user IDs
+    with pytest.raises(ValueError, match="user_id cannot be empty or blank"):
+        WhatsAppService.get_user_session_name("")
+
+    with pytest.raises(ValueError, match="user_id cannot be empty or blank"):
+        WhatsAppService.get_user_session_name("   ")
+
+    with pytest.raises(ValueError, match="user_id cannot be empty or blank"):
+        WhatsAppService.get_user_session_name(None)  # type: ignore
+
+
+@pytest.mark.anyio
+async def test_get_session_status_strict_tenant_isolation(base_db):
+    """Verify 404 on user session returns NOT_CONNECTED and does NOT leak default session."""
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 404
+    mock_client.get.return_value = mock_resp
+
+    service = WhatsAppService(db_client=base_db, http_client=mock_client)
+    status = await service.get_session_status("user_tenant_b")
+
+    assert status["session_name"] == "user_user_tenant_b"
+    assert status["status"] == "NOT_CONNECTED"
+    assert status["connected"] is False
+    assert status["phone_number"] is None
+
+
+@pytest.mark.anyio
+async def test_get_session_status_service_unavailable_on_network_error(base_db):
+    """Verify graceful handling when WAHA container is unreachable."""
+    mock_client = AsyncMock(spec=httpx.AsyncClient)
+    mock_client.get.side_effect = httpx.ConnectError("Connection refused on port 3001")
+
+    service = WhatsAppService(db_client=base_db, http_client=mock_client)
+    status = await service.get_session_status("user_xyz")
+
+    assert status["status"] == "SERVICE_UNAVAILABLE"
+    assert status["connected"] is False
+    assert status["phone_number"] is None
+

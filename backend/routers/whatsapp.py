@@ -309,9 +309,13 @@ async def get_whatsapp_session_status(
         }
     except Exception as exc:
         logger.error(f"Error fetching WhatsApp session status for user {user_id}: {exc}", exc_info=True)
+        try:
+            fallback_name = svc.get_user_session_name(user_id)
+        except Exception:
+            fallback_name = "user_unknown"
         return {
             "data": WhatsAppSessionStatus(
-                session_name=svc.get_user_session_name(user_id),
+                session_name=fallback_name,
                 status="SERVICE_UNAVAILABLE",
                 connected=False,
             ),
