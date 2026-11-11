@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
+import { WhatsAppConnection } from "@/components/settings/WhatsAppConnection";
 import { SuppressionTable } from "@/components/settings/SuppressionTable";
-import { User, ShieldAlert } from "lucide-react";
+import { User, Smartphone, ShieldAlert } from "lucide-react";
 
-type SettingsTab = "profile" | "suppression";
+type SettingsTab = "profile" | "whatsapp" | "suppression";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
@@ -18,7 +19,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage your organization profile and view outreach suppression safeguards
+          Manage your organization profile, connect your WhatsApp device, and view safeguards
         </p>
       </div>
 
@@ -39,6 +40,20 @@ export default function SettingsPage() {
         </button>
 
         <button
+          onClick={() => setActiveTab("whatsapp")}
+          className={`flex items-center gap-2 pb-3 px-1 ml-6 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === "whatsapp"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+          aria-selected={activeTab === "whatsapp"}
+          role="tab"
+        >
+          <Smartphone className="w-4 h-4" />
+          <span>WhatsApp Connection</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab("suppression")}
           className={`flex items-center gap-2 pb-3 px-1 ml-6 text-sm font-medium border-b-2 transition-colors ${
             activeTab === "suppression"
@@ -56,6 +71,7 @@ export default function SettingsPage() {
       {/* Tab Content */}
       <div className="pt-2">
         {activeTab === "profile" && <ProfileSettings />}
+        {activeTab === "whatsapp" && <WhatsAppConnection />}
         {activeTab === "suppression" && <SuppressionTable />}
       </div>
     </div>

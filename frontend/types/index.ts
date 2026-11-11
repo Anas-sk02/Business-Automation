@@ -713,6 +713,32 @@ export interface NotificationListResponse {
   total: number;
 }
 
+// Multi-Tenant WhatsApp Session Types
+export type WhatsAppSessionState =
+  | "WORKING"
+  | "SCAN_QR_CODE"
+  | "STARTING"
+  | "STOPPED"
+  | "FAILED"
+  | "NOT_CONNECTED"
+  | "SERVICE_UNAVAILABLE"
+  | "UNKNOWN";
+
+export interface WhatsAppSessionStatus {
+  session_name: string;
+  status: WhatsAppSessionState;
+  connected: boolean;
+  phone_number?: string | null;
+  push_name?: string | null;
+}
+
+export interface WhatsAppSessionQRResponse {
+  session_name: string;
+  qr_code?: string | null;
+  status: string;
+}
+
+
 
 
 

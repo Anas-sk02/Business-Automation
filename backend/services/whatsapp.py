@@ -10,6 +10,7 @@ and automatic pipeline stage progression conforming to:
 """
 
 from datetime import datetime, time, timezone
+import base64
 import logging
 from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
@@ -172,8 +173,179 @@ class WhatsAppService:
 
         return total_sends
 
-    async def _send_waha(self, chat_id: str, text: str) -> str:
-        """Send message via local WAHA Docker container."""
+    @staticmethod
+    def get_user_session_name(user_id: str) -> str:
+        """Derive a deterministic, safe alphanumeric session name per user."""
+        clean_id = str(user_id).replace("-", "").strip()
+        return f"user_{clean_id}"
+
+    async def get_session_status(self, user_id: str) -> Dict[str, Any]:
+        """Fetch real-time WAHA session status for an authenticated user."""
+        session_name = self.get_user_session_name(user_id)
+        base_url = settings.WAHA_BASE_URL.rstrip("/")
+        headers = {"Content-Type": "application/json"}
+        if settings.WAHA_API_KEY:
+            headers["X-Api-Key"] = settings.WAHA_API_KEY
+
+        async def _probe(client: httpx.AsyncClient) -> Dict[str, Any]:
+            try:
+                # 1. Probe user's specific session
+                resp = await client.get(f"{base_url}/api/sessions/{session_name}", headers=headers, timeout=5.0)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    status_val = data.get("status", "UNKNOWN")
+                    me = data.get("me") or {}
+                    phone = me.get("id", "").split("@")[0] if me.get("id") else None
+                    push_name = me.get("pushName")
+                    return {
+                        "session_name": session_name,
+                        "status": status_val,
+                        "connected": (status_val == "WORKING"),
+                        "phone_number": phone,
+                        "push_name": push_name,
+                    }
+                elif resp.status_code == 404:
+                    # 2. Check if 'default' session is active as fallback for single-user dev mode
+                    try:
+                        def_resp = await client.get(f"{base_url}/api/sessions/default", headers=headers, timeout=3.0)
+                        if def_resp.status_code == 200:
+                            def_data = def_resp.json()
+                            if def_data.get("status") == "WORKING":
+                                def_me = def_data.get("me") or {}
+                                def_phone = def_me.get("id", "").split("@")[0] if def_me.get("id") else None
+                                return {
+                                    "session_name": "default",
+                                    "status": "WORKING",
+                                    "connected": True,
+                                    "phone_number": def_phone,
+                                    "push_name": def_me.get("pushName"),
+                                }
+                    except Exception:
+                        pass
+
+                    return {
+                        "session_name": session_name,
+                        "status": "NOT_CONNECTED",
+                        "connected": False,
+                        "phone_number": None,
+                        "push_name": None,
+                    }
+                else:
+                    return {
+                        "session_name": session_name,
+                        "status": "STOPPED",
+                        "connected": False,
+                        "phone_number": None,
+                        "push_name": None,
+                    }
+            except Exception as exc:
+                logger.warning(f"WAHA session probe error for user {user_id}: {exc}")
+                return {
+                    "session_name": session_name,
+                    "status": "SERVICE_UNAVAILABLE",
+                    "connected": False,
+                    "phone_number": None,
+                    "push_name": None,
+                }
+
+        if self._http:
+            return await _probe(self._http)
+        else:
+            async with httpx.AsyncClient() as client:
+                return await _probe(client)
+
+    async def start_session(self, user_id: str) -> Dict[str, Any]:
+        """Start or create an isolated WAHA session for the user."""
+        session_name = self.get_user_session_name(user_id)
+        base_url = settings.WAHA_BASE_URL.rstrip("/")
+        headers = {"Content-Type": "application/json"}
+        if settings.WAHA_API_KEY:
+            headers["X-Api-Key"] = settings.WAHA_API_KEY
+
+        async def _start(client: httpx.AsyncClient) -> Dict[str, Any]:
+            try:
+                # 1. Try to start existing session
+                resp = await client.post(
+                    f"{base_url}/api/sessions/{session_name}/start",
+                    headers=headers,
+                    timeout=10.0,
+                )
+                if resp.status_code not in (200, 201):
+                    # 2. If session doesn't exist yet, create it
+                    await client.post(
+                        f"{base_url}/api/sessions",
+                        headers=headers,
+                        json={"name": session_name, "start": True},
+                        timeout=10.0,
+                    )
+            except Exception as exc:
+                logger.warning(f"Error starting WAHA session {session_name}: {exc}")
+
+            return await self.get_session_status(user_id)
+
+        if self._http:
+            return await _start(self._http)
+        else:
+            async with httpx.AsyncClient() as client:
+                return await _start(client)
+
+    async def get_session_qr(self, user_id: str) -> Optional[str]:
+        """Fetch QR code as base64 data URL for display in frontend."""
+        session_name = self.get_user_session_name(user_id)
+        base_url = settings.WAHA_BASE_URL.rstrip("/")
+        headers = {}
+        if settings.WAHA_API_KEY:
+            headers["X-Api-Key"] = settings.WAHA_API_KEY
+
+        async def _fetch_qr(client: httpx.AsyncClient) -> Optional[str]:
+            urls = [
+                f"{base_url}/api/{session_name}/auth/qr",
+                f"{base_url}/api/sessions/{session_name}/auth/qr",
+                f"{base_url}/api/screenshot?session={session_name}",
+            ]
+            for url in urls:
+                try:
+                    resp = await client.get(url, headers=headers, timeout=10.0)
+                    if resp.status_code == 200 and resp.content:
+                        ct = resp.headers.get("content-type", "image/png")
+                        if "image" in ct:
+                            b64 = base64.b64encode(resp.content).decode("ascii")
+                            return f"data:{ct};base64,{b64}"
+                except Exception:
+                    continue
+            return None
+
+        if self._http:
+            return await _fetch_qr(self._http)
+        else:
+            async with httpx.AsyncClient() as client:
+                return await _fetch_qr(client)
+
+    async def logout_session(self, user_id: str) -> bool:
+        """Disconnect and stop user's WAHA session."""
+        session_name = self.get_user_session_name(user_id)
+        base_url = settings.WAHA_BASE_URL.rstrip("/")
+        headers = {"Content-Type": "application/json"}
+        if settings.WAHA_API_KEY:
+            headers["X-Api-Key"] = settings.WAHA_API_KEY
+
+        async def _logout(client: httpx.AsyncClient) -> bool:
+            try:
+                await client.post(f"{base_url}/api/sessions/{session_name}/logout", headers=headers, timeout=10.0)
+                await client.post(f"{base_url}/api/sessions/{session_name}/stop", headers=headers, timeout=10.0)
+                return True
+            except Exception as exc:
+                logger.warning(f"Error logging out WAHA session {session_name}: {exc}")
+                return False
+
+        if self._http:
+            return await _logout(self._http)
+        else:
+            async with httpx.AsyncClient() as client:
+                return await _logout(client)
+
+    async def _send_waha(self, chat_id: str, text: str, session: str = "default") -> str:
+        """Send message via WAHA Docker container using the resolved session."""
         base_url = settings.WAHA_BASE_URL.rstrip("/")
         url = f"{base_url}/api/sendText"
 
@@ -182,7 +354,7 @@ class WhatsAppService:
             headers["X-Api-Key"] = settings.WAHA_API_KEY
 
         payload = {
-            "session": "default",
+            "session": session,
             "chatId": chat_id,
             "text": text,
         }
@@ -471,7 +643,15 @@ class WhatsAppService:
         try:
             if self.provider == "waha":
                 chat_id = self.format_waha_chat_id(normalized_phone)
-                wa_msg_id = await self._send_waha(chat_id, body_text)
+                target_session = "default"
+                if user_id:
+                    try:
+                        session_info = await self.get_session_status(user_id)
+                        if session_info.get("connected") and session_info.get("session_name"):
+                            target_session = session_info["session_name"]
+                    except Exception:
+                        target_session = "default"
+                wa_msg_id = await self._send_waha(chat_id, body_text, session=target_session)
                 cost_inr = 0.0
             elif self.provider == "twilio":
                 wa_msg_id = await self._send_twilio(

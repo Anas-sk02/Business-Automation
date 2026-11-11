@@ -446,3 +446,64 @@ def test_public_webhook_error_handled_gracefully(unauth_client):
         assert "Corrupt payload" in data["message"]
 
 
+def test_get_whatsapp_session_status_endpoint(client):
+    """Verify getting user's isolated WhatsApp session status."""
+    mock_status = {
+        "session_name": "user_useruuid123",
+        "status": "WORKING",
+        "connected": True,
+        "phone_number": "918087215103",
+        "push_name": "Test User",
+    }
+    with patch("backend.routers.whatsapp.WhatsAppService.get_session_status", new_callable=AsyncMock) as mock_stat:
+        mock_stat.return_value = mock_status
+        response = client.get("/api/whatsapp/session/status")
+        assert response.status_code == 200
+        res = response.json()
+        assert res["data"]["connected"] is True
+        assert res["data"]["phone_number"] == "918087215103"
+        assert res["data"]["session_name"] == "user_useruuid123"
+
+
+def test_start_whatsapp_session_endpoint(client):
+    """Verify starting user's isolated WhatsApp session."""
+    mock_res = {
+        "session_name": "user_useruuid123",
+        "status": "SCAN_QR_CODE",
+        "connected": False,
+        "phone_number": None,
+        "push_name": None,
+    }
+    with patch("backend.routers.whatsapp.WhatsAppService.start_session", new_callable=AsyncMock) as mock_start:
+        mock_start.return_value = mock_res
+        response = client.post("/api/whatsapp/session/start")
+        assert response.status_code == 200
+        res = response.json()
+        assert res["data"]["status"] == "SCAN_QR_CODE"
+        assert res["data"]["connected"] is False
+
+
+def test_get_whatsapp_qr_code_endpoint(client):
+    """Verify fetching QR code for pairing."""
+    with patch("backend.routers.whatsapp.WhatsAppService.get_session_qr", new_callable=AsyncMock) as mock_qr, \
+         patch("backend.routers.whatsapp.WhatsAppService.get_session_status", new_callable=AsyncMock) as mock_stat:
+        mock_qr.return_value = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+        mock_stat.return_value = {"status": "SCAN_QR_CODE"}
+        response = client.get("/api/whatsapp/session/qr")
+        assert response.status_code == 200
+        res = response.json()
+        assert res["data"]["qr_code"] == "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+        assert res["data"]["status"] == "SCAN_QR_CODE"
+
+
+def test_logout_whatsapp_session_endpoint(client):
+    """Verify disconnecting user's WhatsApp session."""
+    with patch("backend.routers.whatsapp.WhatsAppService.logout_session", new_callable=AsyncMock) as mock_logout:
+        mock_logout.return_value = True
+        response = client.post("/api/whatsapp/session/logout")
+        assert response.status_code == 200
+        res = response.json()
+        assert res["data"]["success"] is True
+
+
+

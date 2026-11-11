@@ -183,4 +183,23 @@ class WebhookProcessResult(BaseModel):
     is_duplicate: bool = False
 
 
+class WhatsAppSessionStatus(BaseModel):
+    """Status model for user's isolated WAHA session."""
+
+    session_name: str
+    status: str
+    connected: bool
+    phone_number: Optional[str] = None
+    push_name: Optional[str] = None
+
+
+class WhatsAppSessionQRResponse(BaseModel):
+    """QR Code response for pairing WhatsApp session."""
+
+    session_name: str
+    qr_code: Optional[str] = None
+    status: str
+
+
+
 

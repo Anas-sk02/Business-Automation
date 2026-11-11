@@ -22,6 +22,8 @@ from backend.models.whatsapp import (
     UpdateDraftRequest,
     WhatsAppDraftResponse,
     WhatsAppMessageResponse,
+    WhatsAppSessionQRResponse,
+    WhatsAppSessionStatus,
 )
 from backend.services.message_generator import (
     CampaignBudgetExceededError as DraftBudgetError,
@@ -268,6 +270,149 @@ async def get_lead_whatsapp_messages(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve WhatsApp conversation history",
+        ) from exc
+
+
+# ============================================================================
+# Multi-Tenant WhatsApp Session Management Endpoints
+# ============================================================================
+
+@router.get(
+    "/whatsapp/session/status",
+    response_model=ResponseEnvelope[WhatsAppSessionStatus],
+    summary="Get user's isolated WhatsApp session status",
+    tags=["WhatsApp"],
+)
+async def get_whatsapp_session_status(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Retrieve the real-time WAHA session connection status for the authenticated user."""
+    db = get_supabase_client()
+    svc = WhatsAppService(db_client=db)
+    user_id = user["id"]
+
+    try:
+        status_info = await svc.get_session_status(user_id)
+
+        # Sync detected phone number to user's profile if connected
+        if status_info.get("connected") and status_info.get("phone_number"):
+            phone = status_info["phone_number"]
+            formatted_phone = f"+{phone}" if not phone.startswith("+") else phone
+            try:
+                db.table("profiles").update({"whatsapp_number": formatted_phone}).eq("id", user_id).execute()
+            except Exception as e:
+                logger.debug(f"Profile whatsapp sync notice: {e}")
+
+        return {
+            "data": WhatsAppSessionStatus(**status_info),
+            "message": "WhatsApp session status retrieved",
+        }
+    except Exception as exc:
+        logger.error(f"Error fetching WhatsApp session status for user {user_id}: {exc}", exc_info=True)
+        return {
+            "data": WhatsAppSessionStatus(
+                session_name=svc.get_user_session_name(user_id),
+                status="SERVICE_UNAVAILABLE",
+                connected=False,
+            ),
+            "message": "WhatsApp service is currently offline or unreachable",
+        }
+
+
+@router.post(
+    "/whatsapp/session/start",
+    response_model=ResponseEnvelope[WhatsAppSessionStatus],
+    summary="Initialize or start user's isolated WhatsApp session",
+    tags=["WhatsApp"],
+)
+async def start_whatsapp_session(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Start or create an isolated WAHA session for the current user to prepare for QR scanning."""
+    db = get_supabase_client()
+    svc = WhatsAppService(db_client=db)
+    user_id = user["id"]
+
+    try:
+        res = await svc.start_session(user_id)
+        return {
+            "data": WhatsAppSessionStatus(**res),
+            "message": "WhatsApp session started",
+        }
+    except Exception as exc:
+        logger.error(f"Error starting WhatsApp session for user {user_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start WhatsApp session: {exc}",
+        ) from exc
+
+
+@router.get(
+    "/whatsapp/session/qr",
+    response_model=ResponseEnvelope[WhatsAppSessionQRResponse],
+    summary="Get WhatsApp QR pairing code",
+    tags=["WhatsApp"],
+)
+async def get_whatsapp_qr_code(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Fetch QR code as base64 data URL for display on user's Settings screen."""
+    db = get_supabase_client()
+    svc = WhatsAppService(db_client=db)
+    user_id = user["id"]
+
+    try:
+        session_name = svc.get_user_session_name(user_id)
+        qr_code = await svc.get_session_qr(user_id)
+        status_info = await svc.get_session_status(user_id)
+
+        return {
+            "data": WhatsAppSessionQRResponse(
+                session_name=session_name,
+                qr_code=qr_code,
+                status=status_info.get("status", "SCAN_QR_CODE"),
+            ),
+            "message": "QR code retrieved successfully" if qr_code else "QR code not yet available. Please wait a moment.",
+        }
+    except Exception as exc:
+        logger.error(f"Error retrieving QR code for user {user_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve QR code",
+        ) from exc
+
+
+@router.post(
+    "/whatsapp/session/logout",
+    response_model=ResponseEnvelope[Dict[str, Any]],
+    summary="Disconnect user's WhatsApp session",
+    tags=["WhatsApp"],
+)
+async def logout_whatsapp_session(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Disconnect and logout the authenticated user's WAHA session."""
+    db = get_supabase_client()
+    svc = WhatsAppService(db_client=db)
+    user_id = user["id"]
+
+    try:
+        success = await svc.logout_session(user_id)
+        # Clear whatsapp_number from profile
+        try:
+            db.table("profiles").update({"whatsapp_number": ""}).eq("id", user_id).execute()
+        except Exception:
+            pass
+
+        return {
+            "data": {"success": success, "session_name": svc.get_user_session_name(user_id)},
+            "message": "WhatsApp session disconnected successfully",
+        }
+    except Exception as exc:
+        logger.error(f"Error logging out WhatsApp session for user {user_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to disconnect WhatsApp session",
         ) from exc
 
 
