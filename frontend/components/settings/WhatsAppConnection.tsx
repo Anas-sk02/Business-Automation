@@ -60,14 +60,20 @@ export function WhatsAppConnection() {
   const handleStartSession = async () => {
     setIsStarting(true);
     setError(null);
+    setQrCode(null);
     try {
       const res = await api.post<ResponseEnvelope<WhatsAppSessionStatus>>("/api/whatsapp/session/start");
       const data = res?.data || (res as unknown as WhatsAppSessionStatus);
       if (data) {
         setSession(data);
       }
-      // Fetch QR immediately
-      await loadQR();
+      // Wait a moment for WAHA to spin up QR, then fetch
+      setTimeout(() => {
+        loadQR();
+      }, 1000);
+      setTimeout(() => {
+        loadQR();
+      }, 2500);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to start WhatsApp connection";
       setError(msg);
@@ -103,7 +109,11 @@ export function WhatsAppConnection() {
 
   // Polling when scanning QR code or starting
   useEffect(() => {
-    if (session && !session.connected && (session.status === "SCAN_QR_CODE" || session.status === "STARTING" || qrCode)) {
+    if (
+      session &&
+      !session.connected &&
+      (session.status === "SCAN_QR_CODE" || session.status === "STARTING" || isStarting || qrCode)
+    ) {
       pollIntervalRef.current = setInterval(async () => {
         try {
           const res = await api.get<ResponseEnvelope<WhatsAppSessionStatus>>("/api/whatsapp/session/status");
@@ -113,12 +123,15 @@ export function WhatsAppConnection() {
             if (data.connected) {
               setQrCode(null);
               if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+            } else if (data.status === "SCAN_QR_CODE" && !qrCode) {
+              // Automatically fetch the QR code image as soon as status is SCAN_QR_CODE
+              loadQR();
             }
           }
         } catch {
           // Keep polling
         }
-      }, 3000);
+      }, 2000);
     } else {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -130,7 +143,7 @@ export function WhatsAppConnection() {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [session, qrCode]);
+  }, [session, qrCode, isStarting, loadQR]);
 
   if (isLoading) {
     return (
@@ -266,7 +279,7 @@ export function WhatsAppConnection() {
                       <li>Point your phone camera at the QR code on this screen</li>
                     </ol>
 
-                    <div className="pt-2 flex items-center gap-2">
+                    <div className="pt-2 flex flex-wrap items-center gap-2">
                       <Button
                         size="sm"
                         variant="outline"
@@ -276,7 +289,23 @@ export function WhatsAppConnection() {
                         <RefreshCw className="h-3 w-3 mr-1" />
                         Refresh QR
                       </Button>
-                      <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleStartSession}
+                        disabled={isStarting}
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        {isStarting ? (
+                          <>
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                            Restarting...
+                          </>
+                        ) : (
+                          "Reset & New QR"
+                        )}
+                      </Button>
+                      <span className="text-[11px] text-muted-foreground flex items-center gap-1 ml-auto">
                         <Loader2 className="h-3 w-3 animate-spin text-primary" />
                         Waiting for scan...
                       </span>

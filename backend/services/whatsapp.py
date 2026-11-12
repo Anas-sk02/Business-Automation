@@ -258,14 +258,25 @@ class WhatsAppService:
 
         async def _start(client: httpx.AsyncClient) -> Dict[str, Any]:
             try:
-                # 1. Try to start existing session
-                resp = await client.post(
-                    f"{base_url}/api/sessions/{session_name}/start",
+                # 1. Check if session already exists in WAHA
+                check_resp = await client.get(
+                    f"{base_url}/api/sessions/{session_name}",
                     headers=headers,
-                    timeout=10.0,
+                    timeout=5.0,
                 )
-                if resp.status_code not in (200, 201):
-                    # 2. If session doesn't exist yet, create it
+                if check_resp.status_code == 200:
+                    curr_data = check_resp.json()
+                    curr_status = curr_data.get("status")
+                    if curr_status == "WORKING":
+                        return await self.get_session_status(user_id)
+                    # If failed, stopped, or stuck in old handshake, restart cleanly for a fresh QR
+                    await client.post(
+                        f"{base_url}/api/sessions/{session_name}/restart",
+                        headers=headers,
+                        timeout=10.0,
+                    )
+                else:
+                    # 2. Session does not exist yet -> create it fresh
                     await client.post(
                         f"{base_url}/api/sessions",
                         headers=headers,
@@ -327,6 +338,10 @@ class WhatsAppService:
             try:
                 await client.post(f"{base_url}/api/sessions/{session_name}/logout", headers=headers, timeout=10.0)
                 await client.post(f"{base_url}/api/sessions/{session_name}/stop", headers=headers, timeout=10.0)
+                try:
+                    await client.delete(f"{base_url}/api/sessions/{session_name}", headers=headers, timeout=10.0)
+                except Exception:
+                    pass
                 return True
             except Exception as exc:
                 logger.warning(f"Error logging out WAHA session {session_name}: {exc}")
